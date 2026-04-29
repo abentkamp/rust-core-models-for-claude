@@ -94,7 +94,7 @@ end core.result
 /-! ## Hax lib -/
 namespace hax_lib
 
-def int.Int := _root_.Int
+@[reducible] def int.Int := _root_.Int
 
 end hax_lib
 

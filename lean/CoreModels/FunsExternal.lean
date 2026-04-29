@@ -18,32 +18,57 @@ namespace CoreModels
 set_option maxHeartbeats 1000000
 -- open core_models removed
 
+/-! ## Local helpers
+
+Aeneas's custom `do` notation does not accept the dependent `if h : c then …`
+form, so we hide such checks behind plain `def`s. -/
+
+/-- Wrap a list as a `Slice` if its length fits in `Usize`; otherwise panic. -/
+private def mkSizedSlice {T : Type} (l : List T) : Result (Slice T) :=
+  if h : l.length ≤ Usize.max then ok ⟨l, h⟩ else fail .panic
+
+/-- Wrap a list as an `Array T N` if its length is exactly `N.val`; else panic. -/
+private def mkSizedArray {T : Type} {N : Std.Usize} (l : List T) : Result (Array T N) :=
+  if h : l.length = N.val then ok ⟨l, h⟩ else fail .panic
+
 /-- [core::cmp::impls::{core::cmp::PartialOrd<&0 (B)> for &1 (A)}::lt]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2133:8-2133:40
     Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<&'1 @A, &'0 @B>}::lt]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'1 @A, &'0 @B>}::lt"]
-axiom Shared1A.Insts.CoreCmpPartialOrdShared0B.lt
+def Shared1A.Insts.CoreCmpPartialOrdShared0B.lt
   {A : Type} {B : Type} (PartialOrdInst : core.cmp.PartialOrd A B) :
-  A → B → Result Bool
+  A → B → Result Bool := fun a b => do
+  let o ← PartialOrdInst.partial_cmp a b
+  match o with
+  | some core.cmp.Ordering.Less => ok true
+  | _ => ok false
 
 /-- [core::cmp::impls::{core::cmp::PartialOrd<&0 (B)> for &1 (A)}::gt]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2141:8-2141:40
     Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<&'1 @A, &'0 @B>}::gt]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialOrd<&'1 @A, &'0 @B>}::gt"]
-axiom Shared1A.Insts.CoreCmpPartialOrdShared0B.gt
+def Shared1A.Insts.CoreCmpPartialOrdShared0B.gt
   {A : Type} {B : Type} (PartialOrdInst : core.cmp.PartialOrd A B) :
-  A → B → Result Bool
+  A → B → Result Bool := fun a b => do
+  let o ← PartialOrdInst.partial_cmp a b
+  match o with
+  | some core.cmp.Ordering.Greater => ok true
+  | _ => ok false
 
 /-- [core::slice::cmp::{core::cmp::PartialEq<[U]> for [T]}::eq]:
     Source: '/rustc/library/core/src/slice/cmp.rs', lines 18:4-18:37
     Name pattern: [core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq]
     Visibility: public -/
 @[rust_fun "core::slice::cmp::{core::cmp::PartialEq<[@T], [@U]>}::eq"]
-axiom Slice.Insts.CoreCmpPartialEqSlice.eq
+def Slice.Insts.CoreCmpPartialEqSlice.eq
   {T : Type} {U : Type} (cmpPartialEqInst : core.cmp.PartialEq T U) :
-  Slice T → Slice U → Result Bool
+  Slice T → Slice U → Result Bool := fun s1 s2 =>
+  if s1.length ≠ s2.length then ok false
+  else do
+    let rs ← (s1.val.zip s2.val).mapM (fun p => cmpPartialEqInst.eq p.1 p.2)
+    ok (rs.all id)
 
 /-- [hax_lib::int::{core::cmp::PartialOrd<hax_lib::int::Int> for hax_lib::int::Int}::le]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 77:46-77:56
@@ -51,8 +76,9 @@ axiom Slice.Insts.CoreCmpPartialEqSlice.eq
     Visibility: public -/
 @[rust_fun
   "hax_lib::int::{core::cmp::PartialOrd<hax_lib::int::Int, hax_lib::int::Int>}::le"]
-axiom hax_lib.int.Int.Insts.CoreCmpPartialOrdInt.le
-  : hax_lib.int.Int → hax_lib.int.Int → Result Bool
+def hax_lib.int.Int.Insts.CoreCmpPartialOrdInt.le
+  : hax_lib.int.Int → hax_lib.int.Int → Result Bool :=
+  fun a b => ok (decide (a ≤ b))
 
 /-- [hax_lib::int::{core::ops::arith::Add<hax_lib::int::Int, hax_lib::int::Int> for hax_lib::int::Int}::add]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 92:8-92:49
@@ -60,8 +86,8 @@ axiom hax_lib.int.Int.Insts.CoreCmpPartialOrdInt.le
     Visibility: public -/
 @[rust_fun
   "hax_lib::int::{core::ops::arith::Add<hax_lib::int::Int, hax_lib::int::Int, hax_lib::int::Int>}::add"]
-axiom hax_lib.int.Int.Insts.CoreOpsArithAddIntInt.add
-  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int
+def hax_lib.int.Int.Insts.CoreOpsArithAddIntInt.add
+  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int := fun a b => ok (a + b)
 
 /-- [hax_lib::int::{core::ops::arith::Sub<hax_lib::int::Int, hax_lib::int::Int> for hax_lib::int::Int}::sub]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 100:8-100:49
@@ -69,8 +95,8 @@ axiom hax_lib.int.Int.Insts.CoreOpsArithAddIntInt.add
     Visibility: public -/
 @[rust_fun
   "hax_lib::int::{core::ops::arith::Sub<hax_lib::int::Int, hax_lib::int::Int, hax_lib::int::Int>}::sub"]
-axiom hax_lib.int.Int.Insts.CoreOpsArithSubIntInt.sub
-  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int
+def hax_lib.int.Int.Insts.CoreOpsArithSubIntInt.sub
+  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int := fun a b => ok (a - b)
 
 /-- [hax_lib::int::{core::ops::arith::Mul<hax_lib::int::Int, hax_lib::int::Int> for hax_lib::int::Int}::mul]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 108:8-108:49
@@ -78,1499 +104,1012 @@ axiom hax_lib.int.Int.Insts.CoreOpsArithSubIntInt.sub
     Visibility: public -/
 @[rust_fun
   "hax_lib::int::{core::ops::arith::Mul<hax_lib::int::Int, hax_lib::int::Int, hax_lib::int::Int>}::mul"]
-axiom hax_lib.int.Int.Insts.CoreOpsArithMulIntInt.mul
-  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int
+def hax_lib.int.Int.Insts.CoreOpsArithMulIntInt.mul
+  : hax_lib.int.Int → hax_lib.int.Int → Result hax_lib.int.Int := fun a b => ok (a * b)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for u8}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<u8>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<u8>}::to_int"]
-axiom U8.Insts.Hax_libIntToInt.to_int : Std.U8 → Result hax_lib.int.Int
+def U8.Insts.Hax_libIntToInt.to_int : Std.U8 → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for u16}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<u16>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<u16>}::to_int"]
-axiom U16.Insts.Hax_libIntToInt.to_int : Std.U16 → Result hax_lib.int.Int
+def U16.Insts.Hax_libIntToInt.to_int : Std.U16 → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for u32}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<u32>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<u32>}::to_int"]
-axiom U32.Insts.Hax_libIntToInt.to_int : Std.U32 → Result hax_lib.int.Int
+def U32.Insts.Hax_libIntToInt.to_int : Std.U32 → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for u64}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<u64>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<u64>}::to_int"]
-axiom U64.Insts.Hax_libIntToInt.to_int : Std.U64 → Result hax_lib.int.Int
+def U64.Insts.Hax_libIntToInt.to_int : Std.U64 → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for u128}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<u128>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<u128>}::to_int"]
-axiom U128.Insts.Hax_libIntToInt.to_int : Std.U128 → Result hax_lib.int.Int
+def U128.Insts.Hax_libIntToInt.to_int : Std.U128 → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for usize}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<usize>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<usize>}::to_int"]
-axiom Usize.Insts.Hax_libIntToInt.to_int : Std.Usize → Result hax_lib.int.Int
+def Usize.Insts.Hax_libIntToInt.to_int : Std.Usize → Result hax_lib.int.Int :=
+  fun x => ok (x.val : Int)
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for i8}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<i8>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<i8>}::to_int"]
-axiom I8.Insts.Hax_libIntToInt.to_int : Std.I8 → Result hax_lib.int.Int
+def I8.Insts.Hax_libIntToInt.to_int : Std.I8 → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for i16}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<i16>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<i16>}::to_int"]
-axiom I16.Insts.Hax_libIntToInt.to_int : Std.I16 → Result hax_lib.int.Int
+def I16.Insts.Hax_libIntToInt.to_int : Std.I16 → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for i32}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<i32>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<i32>}::to_int"]
-axiom I32.Insts.Hax_libIntToInt.to_int : Std.I32 → Result hax_lib.int.Int
+def I32.Insts.Hax_libIntToInt.to_int : Std.I32 → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for i64}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<i64>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<i64>}::to_int"]
-axiom I64.Insts.Hax_libIntToInt.to_int : Std.I64 → Result hax_lib.int.Int
+def I64.Insts.Hax_libIntToInt.to_int : Std.I64 → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for i128}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<i128>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<i128>}::to_int"]
-axiom I128.Insts.Hax_libIntToInt.to_int : Std.I128 → Result hax_lib.int.Int
+def I128.Insts.Hax_libIntToInt.to_int : Std.I128 → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [hax_lib::int::{hax_lib::int::ToInt for isize}::to_int]:
     Source: '/cargo/git/checkouts/hax-580ebeee043cdea1/492a34e/hax-lib/src/dummy.rs', lines 155:16-155:38
     Name pattern: [hax_lib::int::{hax_lib::int::ToInt<isize>}::to_int]
     Visibility: public -/
 @[rust_fun "hax_lib::int::{hax_lib::int::ToInt<isize>}::to_int"]
-axiom Isize.Insts.Hax_libIntToInt.to_int : Std.Isize → Result hax_lib.int.Int
+def Isize.Insts.Hax_libIntToInt.to_int : Std.Isize → Result hax_lib.int.Int :=
+  fun x => ok x.val
 
 /-- [rust_primitives::slice::slice_length]:
     Source: 'rust_primitives/src/lib.rs', lines 4:4-4:44
     Name pattern: [rust_primitives::slice::slice_length]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_length"]
-axiom rust_primitives.slice.slice_length
-  {T : Type} : Slice T → Result Std.Usize
+def rust_primitives.slice.slice_length
+  {T : Type} : Slice T → Result Std.Usize := fun s => ok (Slice.len s)
 
 /-- [rust_primitives::slice::slice_split_at]:
     Source: 'rust_primitives/src/lib.rs', lines 8:4-8:65
     Name pattern: [rust_primitives::slice::slice_split_at]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_split_at"]
-axiom rust_primitives.slice.slice_split_at
-  {T : Type} : Slice T → Std.Usize → Result ((Slice T) × (Slice T))
+def rust_primitives.slice.slice_split_at
+  {T : Type} : Slice T → Std.Usize → Result ((Slice T) × (Slice T)) :=
+  Aeneas.Std.core.slice.Slice.split_at
 
 /-- [rust_primitives::slice::slice_contains]:
     Source: 'rust_primitives/src/lib.rs', lines 11:4-11:63
     Name pattern: [rust_primitives::slice::slice_contains]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_contains"]
-axiom rust_primitives.slice.slice_contains
+def rust_primitives.slice.slice_contains
   {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
-  Slice T → T → Result Bool
+  Slice T → T → Result Bool := fun s x => do
+  let rs ← s.val.mapM (fun y => corecmpPartialEqInst.eq y x)
+  ok (rs.any id)
 
 /-- [rust_primitives::slice::slice_index]:
     Source: 'rust_primitives/src/lib.rs', lines 15:4-15:50
     Name pattern: [rust_primitives::slice::slice_index]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_index"]
-axiom rust_primitives.slice.slice_index
-  {T : Type} : Slice T → Std.Usize → Result T
+def rust_primitives.slice.slice_index
+  {T : Type} : Slice T → Std.Usize → Result T := Slice.index_usize
 
 /-- [rust_primitives::slice::slice_slice]:
     Source: 'rust_primitives/src/lib.rs', lines 18:4-18:62
     Name pattern: [rust_primitives::slice::slice_slice]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_slice"]
-axiom rust_primitives.slice.slice_slice
-  {T : Type} : Slice T → Std.Usize → Std.Usize → Result (Slice T)
+def rust_primitives.slice.slice_slice
+  {T : Type} : Slice T → Std.Usize → Std.Usize → Result (Slice T) :=
+  fun s i j => Slice.subslice s ⟨i, j⟩
 
 /-- [rust_primitives::slice::slice_clone_from_slice]:
     Source: 'rust_primitives/src/lib.rs', lines 21:4-21:67
     Name pattern: [rust_primitives::slice::slice_clone_from_slice]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::slice_clone_from_slice"]
-axiom rust_primitives.slice.slice_clone_from_slice
+def rust_primitives.slice.slice_clone_from_slice
   {T : Type} (corecloneCloneInst : core.clone.Clone T) :
-  Slice T → Slice T → Result (Slice T)
+  Slice T → Slice T → Result (Slice T) := fun dest src =>
+  if dest.length = src.length then ok ⟨src.val, src.property⟩
+  else fail .panic
 
 /-- [rust_primitives::slice::array_from_fn]:
     Source: 'rust_primitives/src/lib.rs', lines 28:4-28:81
     Name pattern: [rust_primitives::slice::array_from_fn]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::array_from_fn"]
-axiom rust_primitives.slice.array_from_fn
+def rust_primitives.slice.array_from_fn
   {T : Type} {F : Type} (N : Std.Usize) (coreopsfunctionFnMutFTupleUsizeTInst :
   core.ops.function.FnMut F Std.Usize T) :
-  F → Result (Array T N)
+  F → Result (Array T N) := fun f => do
+  let result ← (List.range N.val).foldlM
+    (fun (s : List T × F) (i : Nat) => do
+      let idx : Std.Usize := ⟨BitVec.ofNat _ i⟩
+      let p ← coreopsfunctionFnMutFTupleUsizeTInst.call_mut s.2 idx
+      ok (s.1 ++ [p.1], p.2))
+    ([], f)
+  mkSizedArray result.1
 
 /-- [rust_primitives::slice::array_map]:
     Source: 'rust_primitives/src/lib.rs', lines 31:4-31:84
     Name pattern: [rust_primitives::slice::array_map]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::array_map"]
-axiom rust_primitives.slice.array_map
+def rust_primitives.slice.array_map
   {T : Type} {U : Type} {F : Type} {N : Std.Usize}
   (coreopsfunctionFnFTupleTUInst : core.ops.function.Fn F T U) :
-  Array T N → F → Result (Array U N)
+  Array T N → F → Result (Array U N) := fun a f => do
+  let mapped ← a.val.mapM (fun x => coreopsfunctionFnFTupleTUInst.call f x)
+  mkSizedArray mapped
 
 /-- [rust_primitives::slice::array_as_slice]:
     Source: 'rust_primitives/src/lib.rs', lines 34:4-34:64
     Name pattern: [rust_primitives::slice::array_as_slice]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::array_as_slice"]
-axiom rust_primitives.slice.array_as_slice
-  {T : Type} {N : Std.Usize} : Array T N → Result (Slice T)
+def rust_primitives.slice.array_as_slice
+  {T : Type} {N : Std.Usize} : Array T N → Result (Slice T) :=
+  fun a => ok (Array.to_slice a)
 
 /-- [rust_primitives::slice::array_slice]:
     Source: 'rust_primitives/src/lib.rs', lines 37:4-37:81
     Name pattern: [rust_primitives::slice::array_slice]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::array_slice"]
-axiom rust_primitives.slice.array_slice
+def rust_primitives.slice.array_slice
   {T : Type} {N : Std.Usize} :
-  Array T N → Std.Usize → Std.Usize → Result (Slice T)
+  Array T N → Std.Usize → Std.Usize → Result (Slice T) :=
+  fun a i j => Array.subslice a ⟨i, j⟩
 
 /-- [rust_primitives::slice::array_index]:
     Source: 'rust_primitives/src/lib.rs', lines 40:4-40:69
     Name pattern: [rust_primitives::slice::array_index]
     Visibility: public -/
 @[rust_fun "rust_primitives::slice::array_index"]
-axiom rust_primitives.slice.array_index
-  {T : Type} {N : Std.Usize} : Array T N → Std.Usize → Result T
+def rust_primitives.slice.array_index
+  {T : Type} {N : Std.Usize} : Array T N → Std.Usize → Result T :=
+  fun a i => Slice.index_usize (Array.to_slice a) i
 
 /-- [rust_primitives::sequence::seq_from_slice]:
     Source: 'rust_primitives/src/lib.rs', lines 51:4-51:48
     Name pattern: [rust_primitives::sequence::seq_from_slice]
     Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_from_slice"]
-axiom rust_primitives.sequence.seq_from_slice
-  {T : Type} : Slice T → Result (rust_primitives.sequence.Seq T)
+def rust_primitives.sequence.seq_from_slice
+  {T : Type} : Slice T → Result (rust_primitives.sequence.Seq T) := fun s => ok s
 
 /-- [rust_primitives::sequence::seq_from_array]:
     Source: 'rust_primitives/src/lib.rs', lines 57:4-57:65
     Name pattern: [rust_primitives::sequence::seq_from_array]
     Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_from_array"]
-axiom rust_primitives.sequence.seq_from_array
+def rust_primitives.sequence.seq_from_array
   {T : Type} {N : Std.Usize} :
-  Array T N → Result (rust_primitives.sequence.Seq T)
+  Array T N → Result (rust_primitives.sequence.Seq T) := fun a => ok (Array.to_slice a)
 
 /-- [rust_primitives::sequence::seq_len]:
     Source: 'rust_primitives/src/lib.rs', lines 81:4-81:42
     Name pattern: [rust_primitives::sequence::seq_len]
     Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_len"]
-axiom rust_primitives.sequence.seq_len
-  {T : Type} : rust_primitives.sequence.Seq T → Result Std.Usize
+def rust_primitives.sequence.seq_len
+  {T : Type} : rust_primitives.sequence.Seq T → Result Std.Usize :=
+  fun s => ok (Slice.len s)
 
 /-- [rust_primitives::sequence::seq_remove]:
     Source: 'rust_primitives/src/lib.rs', lines 87:4-87:55
     Name pattern: [rust_primitives::sequence::seq_remove]
     Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_remove"]
-axiom rust_primitives.sequence.seq_remove
+def rust_primitives.sequence.seq_remove
   {T : Type} :
   rust_primitives.sequence.Seq T → Std.Usize → Result (T ×
-    (rust_primitives.sequence.Seq T))
+    (rust_primitives.sequence.Seq T)) := fun s i => do
+  let x ← Slice.index_usize s i
+  let new_seq ← mkSizedSlice (s.val.take i.val ++ s.val.drop (i.val + 1))
+  ok (x, new_seq)
 
-/-- [rust_primitives::arithmetic::saturating_mul_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_u8]
-    Visibility: public -/
+/-! ### Saturating multiplication and Euclidean remainder
+
+Helpers for unsigned/signed scalars; signed `rem_euclid` corrects the sign of
+Lean's T-division `%`. -/
+
+private def usaturating_mul {ty : UScalarTy} (x y : UScalar ty) : UScalar ty :=
+  ⟨BitVec.ofNat _ (Min.min (UScalar.max ty) (x.val * y.val))⟩
+
+private def isaturating_mul {ty : IScalarTy} (x y : IScalar ty) : IScalar ty :=
+  ⟨BitVec.ofInt _ (Max.max (IScalar.min ty) (Min.min (IScalar.max ty) (x.val * y.val)))⟩
+
+private def urem_euclid {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
+  if y.val = 0 then fail .panic
+  else ok ⟨BitVec.ofNat _ (x.val % y.val)⟩
+
+private def irem_euclid {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
+  if y.val = 0 then fail .panic
+  else
+    let r := x.val % y.val
+    let r' : Int := if r < 0 then r + (y.val.natAbs : Int) else r
+    ok ⟨BitVec.ofInt _ r'⟩
+
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_u8"]
-axiom rust_primitives.arithmetic.saturating_mul_u8
-  : Std.U8 → Std.U8 → Result Std.U8
+def rust_primitives.arithmetic.saturating_mul_u8 : Std.U8 → Std.U8 → Result Std.U8 :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_u8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_u8"]
-axiom rust_primitives.arithmetic.rem_euclid_u8
-  : Std.U8 → Std.U8 → Result Std.U8
+def rust_primitives.arithmetic.rem_euclid_u8 : Std.U8 → Std.U8 → Result Std.U8 := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_u16"]
-axiom rust_primitives.arithmetic.saturating_mul_u16
-  : Std.U16 → Std.U16 → Result Std.U16
+def rust_primitives.arithmetic.saturating_mul_u16 : Std.U16 → Std.U16 → Result Std.U16 :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_u16"]
-axiom rust_primitives.arithmetic.rem_euclid_u16
-  : Std.U16 → Std.U16 → Result Std.U16
+def rust_primitives.arithmetic.rem_euclid_u16 : Std.U16 → Std.U16 → Result Std.U16 := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_u32"]
-axiom rust_primitives.arithmetic.saturating_mul_u32
-  : Std.U32 → Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.saturating_mul_u32 : Std.U32 → Std.U32 → Result Std.U32 :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_u32"]
-axiom rust_primitives.arithmetic.rem_euclid_u32
-  : Std.U32 → Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.rem_euclid_u32 : Std.U32 → Std.U32 → Result Std.U32 := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_u64"]
-axiom rust_primitives.arithmetic.saturating_mul_u64
-  : Std.U64 → Std.U64 → Result Std.U64
+def rust_primitives.arithmetic.saturating_mul_u64 : Std.U64 → Std.U64 → Result Std.U64 :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_u64"]
-axiom rust_primitives.arithmetic.rem_euclid_u64
-  : Std.U64 → Std.U64 → Result Std.U64
+def rust_primitives.arithmetic.rem_euclid_u64 : Std.U64 → Std.U64 → Result Std.U64 := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_u128"]
-axiom rust_primitives.arithmetic.saturating_mul_u128
-  : Std.U128 → Std.U128 → Result Std.U128
+def rust_primitives.arithmetic.saturating_mul_u128 : Std.U128 → Std.U128 → Result Std.U128 :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_u128"]
-axiom rust_primitives.arithmetic.rem_euclid_u128
-  : Std.U128 → Std.U128 → Result Std.U128
+def rust_primitives.arithmetic.rem_euclid_u128 : Std.U128 → Std.U128 → Result Std.U128 := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_usize"]
-axiom rust_primitives.arithmetic.saturating_mul_usize
-  : Std.Usize → Std.Usize → Result Std.Usize
+def rust_primitives.arithmetic.saturating_mul_usize : Std.Usize → Std.Usize → Result Std.Usize :=
+  fun x y => ok (usaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_usize"]
-axiom rust_primitives.arithmetic.rem_euclid_usize
-  : Std.Usize → Std.Usize → Result Std.Usize
+def rust_primitives.arithmetic.rem_euclid_usize : Std.Usize → Std.Usize → Result Std.Usize := urem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_i8"]
-axiom rust_primitives.arithmetic.saturating_mul_i8
-  : Std.I8 → Std.I8 → Result Std.I8
+def rust_primitives.arithmetic.saturating_mul_i8 : Std.I8 → Std.I8 → Result Std.I8 :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_i8"]
-axiom rust_primitives.arithmetic.rem_euclid_i8
-  : Std.I8 → Std.I8 → Result Std.I8
+def rust_primitives.arithmetic.rem_euclid_i8 : Std.I8 → Std.I8 → Result Std.I8 := irem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_i16"]
-axiom rust_primitives.arithmetic.saturating_mul_i16
-  : Std.I16 → Std.I16 → Result Std.I16
+def rust_primitives.arithmetic.saturating_mul_i16 : Std.I16 → Std.I16 → Result Std.I16 :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_i16"]
-axiom rust_primitives.arithmetic.rem_euclid_i16
-  : Std.I16 → Std.I16 → Result Std.I16
+def rust_primitives.arithmetic.rem_euclid_i16 : Std.I16 → Std.I16 → Result Std.I16 := irem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_i32"]
-axiom rust_primitives.arithmetic.saturating_mul_i32
-  : Std.I32 → Std.I32 → Result Std.I32
+def rust_primitives.arithmetic.saturating_mul_i32 : Std.I32 → Std.I32 → Result Std.I32 :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_i32"]
-axiom rust_primitives.arithmetic.rem_euclid_i32
-  : Std.I32 → Std.I32 → Result Std.I32
+def rust_primitives.arithmetic.rem_euclid_i32 : Std.I32 → Std.I32 → Result Std.I32 := irem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_i64"]
-axiom rust_primitives.arithmetic.saturating_mul_i64
-  : Std.I64 → Std.I64 → Result Std.I64
+def rust_primitives.arithmetic.saturating_mul_i64 : Std.I64 → Std.I64 → Result Std.I64 :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_i64"]
-axiom rust_primitives.arithmetic.rem_euclid_i64
-  : Std.I64 → Std.I64 → Result Std.I64
+def rust_primitives.arithmetic.rem_euclid_i64 : Std.I64 → Std.I64 → Result Std.I64 := irem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_i128"]
-axiom rust_primitives.arithmetic.saturating_mul_i128
-  : Std.I128 → Std.I128 → Result Std.I128
+def rust_primitives.arithmetic.saturating_mul_i128 : Std.I128 → Std.I128 → Result Std.I128 :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_i128"]
-axiom rust_primitives.arithmetic.rem_euclid_i128
-  : Std.I128 → Std.I128 → Result Std.I128
+def rust_primitives.arithmetic.rem_euclid_i128 : Std.I128 → Std.I128 → Result Std.I128 := irem_euclid
 
-/-- [rust_primitives::arithmetic::saturating_mul_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::saturating_mul_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::saturating_mul_isize"]
-axiom rust_primitives.arithmetic.saturating_mul_isize
-  : Std.Isize → Std.Isize → Result Std.Isize
+def rust_primitives.arithmetic.saturating_mul_isize : Std.Isize → Std.Isize → Result Std.Isize :=
+  fun x y => ok (isaturating_mul x y)
 
-/-- [rust_primitives::arithmetic::rem_euclid_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 132:18-132:21
-    Name pattern: [rust_primitives::arithmetic::rem_euclid_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::rem_euclid_isize"]
-axiom rust_primitives.arithmetic.rem_euclid_isize
-  : Std.Isize → Std.Isize → Result Std.Isize
+def rust_primitives.arithmetic.rem_euclid_isize : Std.Isize → Std.Isize → Result Std.Isize := irem_euclid
 
-/-- [rust_primitives::arithmetic::overflowing_sub_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_u8]
-    Visibility: public -/
+/-! ### Overflowing subtraction and multiplication
+
+`overflowing_sub` for unsigned: underflow iff `x.val < y.val`.
+`overflowing_mul` for unsigned: overflow iff `2^numBits ≤ x.val * y.val`.
+For signed: out-of-range iff result `< -2^(numBits-1)` or `≥ 2^(numBits-1)`. -/
+
+private def uoverflowing_sub {ty : UScalarTy} (x y : UScalar ty) : UScalar ty × Bool :=
+  (⟨x.bv - y.bv⟩, decide (x.val < y.val))
+
+private def uoverflowing_mul {ty : UScalarTy} (x y : UScalar ty) : UScalar ty × Bool :=
+  (⟨BitVec.ofNat _ (x.val * y.val)⟩, decide (2 ^ ty.numBits ≤ x.val * y.val))
+
+private def ioverflowing_sub {ty : IScalarTy} (x y : IScalar ty) : IScalar ty × Bool :=
+  let z := x.val - y.val
+  (⟨BitVec.ofInt _ z⟩,
+   decide (¬ (-2 ^ (ty.numBits - 1) ≤ z ∧ z < 2 ^ (ty.numBits - 1))))
+
+private def ioverflowing_mul {ty : IScalarTy} (x y : IScalar ty) : IScalar ty × Bool :=
+  let z := x.val * y.val
+  (⟨BitVec.ofInt _ z⟩,
+   decide (¬ (-2 ^ (ty.numBits - 1) ≤ z ∧ z < 2 ^ (ty.numBits - 1))))
+
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_u8"]
-axiom rust_primitives.arithmetic.overflowing_sub_u8
-  : Std.U8 → Std.U8 → Result (Std.U8 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_u8 : Std.U8 → Std.U8 → Result (Std.U8 × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_u8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_u8"]
-axiom rust_primitives.arithmetic.overflowing_mul_u8
-  : Std.U8 → Std.U8 → Result (Std.U8 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_u8 : Std.U8 → Std.U8 → Result (Std.U8 × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_u16"]
-axiom rust_primitives.arithmetic.overflowing_sub_u16
-  : Std.U16 → Std.U16 → Result (Std.U16 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_u16 : Std.U16 → Std.U16 → Result (Std.U16 × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_u16"]
-axiom rust_primitives.arithmetic.overflowing_mul_u16
-  : Std.U16 → Std.U16 → Result (Std.U16 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_u16 : Std.U16 → Std.U16 → Result (Std.U16 × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_u32"]
-axiom rust_primitives.arithmetic.overflowing_sub_u32
-  : Std.U32 → Std.U32 → Result (Std.U32 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_u32 : Std.U32 → Std.U32 → Result (Std.U32 × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_u32"]
-axiom rust_primitives.arithmetic.overflowing_mul_u32
-  : Std.U32 → Std.U32 → Result (Std.U32 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_u32 : Std.U32 → Std.U32 → Result (Std.U32 × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_u64"]
-axiom rust_primitives.arithmetic.overflowing_sub_u64
-  : Std.U64 → Std.U64 → Result (Std.U64 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_u64 : Std.U64 → Std.U64 → Result (Std.U64 × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_u64"]
-axiom rust_primitives.arithmetic.overflowing_mul_u64
-  : Std.U64 → Std.U64 → Result (Std.U64 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_u64 : Std.U64 → Std.U64 → Result (Std.U64 × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_u128"]
-axiom rust_primitives.arithmetic.overflowing_sub_u128
-  : Std.U128 → Std.U128 → Result (Std.U128 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_u128 : Std.U128 → Std.U128 → Result (Std.U128 × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_u128"]
-axiom rust_primitives.arithmetic.overflowing_mul_u128
-  : Std.U128 → Std.U128 → Result (Std.U128 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_u128 : Std.U128 → Std.U128 → Result (Std.U128 × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_usize"]
-axiom rust_primitives.arithmetic.overflowing_sub_usize
-  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
+def rust_primitives.arithmetic.overflowing_sub_usize : Std.Usize → Std.Usize → Result (Std.Usize × Bool) :=
+  fun x y => ok (uoverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_usize"]
-axiom rust_primitives.arithmetic.overflowing_mul_usize
-  : Std.Usize → Std.Usize → Result (Std.Usize × Bool)
+def rust_primitives.arithmetic.overflowing_mul_usize : Std.Usize → Std.Usize → Result (Std.Usize × Bool) :=
+  fun x y => ok (uoverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_i8"]
-axiom rust_primitives.arithmetic.overflowing_sub_i8
-  : Std.I8 → Std.I8 → Result (Std.I8 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_i8 : Std.I8 → Std.I8 → Result (Std.I8 × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_i8"]
-axiom rust_primitives.arithmetic.overflowing_mul_i8
-  : Std.I8 → Std.I8 → Result (Std.I8 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_i8 : Std.I8 → Std.I8 → Result (Std.I8 × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_i16"]
-axiom rust_primitives.arithmetic.overflowing_sub_i16
-  : Std.I16 → Std.I16 → Result (Std.I16 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_i16 : Std.I16 → Std.I16 → Result (Std.I16 × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_i16"]
-axiom rust_primitives.arithmetic.overflowing_mul_i16
-  : Std.I16 → Std.I16 → Result (Std.I16 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_i16 : Std.I16 → Std.I16 → Result (Std.I16 × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_i32"]
-axiom rust_primitives.arithmetic.overflowing_sub_i32
-  : Std.I32 → Std.I32 → Result (Std.I32 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_i32 : Std.I32 → Std.I32 → Result (Std.I32 × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_i32"]
-axiom rust_primitives.arithmetic.overflowing_mul_i32
-  : Std.I32 → Std.I32 → Result (Std.I32 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_i32 : Std.I32 → Std.I32 → Result (Std.I32 × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_i64"]
-axiom rust_primitives.arithmetic.overflowing_sub_i64
-  : Std.I64 → Std.I64 → Result (Std.I64 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_i64 : Std.I64 → Std.I64 → Result (Std.I64 × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_i64"]
-axiom rust_primitives.arithmetic.overflowing_mul_i64
-  : Std.I64 → Std.I64 → Result (Std.I64 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_i64 : Std.I64 → Std.I64 → Result (Std.I64 × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_i128"]
-axiom rust_primitives.arithmetic.overflowing_sub_i128
-  : Std.I128 → Std.I128 → Result (Std.I128 × Bool)
+def rust_primitives.arithmetic.overflowing_sub_i128 : Std.I128 → Std.I128 → Result (Std.I128 × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_i128"]
-axiom rust_primitives.arithmetic.overflowing_mul_i128
-  : Std.I128 → Std.I128 → Result (Std.I128 × Bool)
+def rust_primitives.arithmetic.overflowing_mul_i128 : Std.I128 → Std.I128 → Result (Std.I128 × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::overflowing_sub_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_sub_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_sub_isize"]
-axiom rust_primitives.arithmetic.overflowing_sub_isize
-  : Std.Isize → Std.Isize → Result (Std.Isize × Bool)
+def rust_primitives.arithmetic.overflowing_sub_isize : Std.Isize → Std.Isize → Result (Std.Isize × Bool) :=
+  fun x y => ok (ioverflowing_sub x y)
 
-/-- [rust_primitives::arithmetic::overflowing_mul_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 135:18-135:68
-    Name pattern: [rust_primitives::arithmetic::overflowing_mul_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::overflowing_mul_isize"]
-axiom rust_primitives.arithmetic.overflowing_mul_isize
-  : Std.Isize → Std.Isize → Result (Std.Isize × Bool)
+def rust_primitives.arithmetic.overflowing_mul_isize : Std.Isize → Std.Isize → Result (Std.Isize × Bool) :=
+  fun x y => ok (ioverflowing_mul x y)
 
-/-- [rust_primitives::arithmetic::pow_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_u8]
-    Visibility: public -/
+/-! ### Power (wrapping). -/
+
 @[rust_fun "rust_primitives::arithmetic::pow_u8"]
-axiom rust_primitives.arithmetic.pow_u8 : Std.U8 → Std.U32 → Result Std.U8
+def rust_primitives.arithmetic.pow_u8 : Std.U8 → Std.U32 → Result Std.U8 :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_u16"]
-axiom rust_primitives.arithmetic.pow_u16
-  : Std.U16 → Std.U32 → Result Std.U16
+def rust_primitives.arithmetic.pow_u16 : Std.U16 → Std.U32 → Result Std.U16 :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_u32"]
-axiom rust_primitives.arithmetic.pow_u32
-  : Std.U32 → Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.pow_u32 : Std.U32 → Std.U32 → Result Std.U32 :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_u64"]
-axiom rust_primitives.arithmetic.pow_u64
-  : Std.U64 → Std.U32 → Result Std.U64
+def rust_primitives.arithmetic.pow_u64 : Std.U64 → Std.U32 → Result Std.U64 :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_u128"]
-axiom rust_primitives.arithmetic.pow_u128
-  : Std.U128 → Std.U32 → Result Std.U128
+def rust_primitives.arithmetic.pow_u128 : Std.U128 → Std.U32 → Result Std.U128 :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_usize"]
-axiom rust_primitives.arithmetic.pow_usize
-  : Std.Usize → Std.U32 → Result Std.Usize
+def rust_primitives.arithmetic.pow_usize : Std.Usize → Std.U32 → Result Std.Usize :=
+  fun x n => ok ⟨BitVec.ofNat _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_i8"]
-axiom rust_primitives.arithmetic.pow_i8 : Std.I8 → Std.U32 → Result Std.I8
+def rust_primitives.arithmetic.pow_i8 : Std.I8 → Std.U32 → Result Std.I8 :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_i16"]
-axiom rust_primitives.arithmetic.pow_i16
-  : Std.I16 → Std.U32 → Result Std.I16
+def rust_primitives.arithmetic.pow_i16 : Std.I16 → Std.U32 → Result Std.I16 :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_i32"]
-axiom rust_primitives.arithmetic.pow_i32
-  : Std.I32 → Std.U32 → Result Std.I32
+def rust_primitives.arithmetic.pow_i32 : Std.I32 → Std.U32 → Result Std.I32 :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_i64"]
-axiom rust_primitives.arithmetic.pow_i64
-  : Std.I64 → Std.U32 → Result Std.I64
+def rust_primitives.arithmetic.pow_i64 : Std.I64 → Std.U32 → Result Std.I64 :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_i128"]
-axiom rust_primitives.arithmetic.pow_i128
-  : Std.I128 → Std.U32 → Result Std.I128
+def rust_primitives.arithmetic.pow_i128 : Std.I128 → Std.U32 → Result Std.I128 :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::pow_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:16-159:35
-    Name pattern: [rust_primitives::arithmetic::pow_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::pow_isize"]
-axiom rust_primitives.arithmetic.pow_isize
-  : Std.Isize → Std.U32 → Result Std.Isize
+def rust_primitives.arithmetic.pow_isize : Std.Isize → Std.U32 → Result Std.Isize :=
+  fun x n => ok ⟨BitVec.ofInt _ (x.val ^ n.val)⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_u8]
-    Visibility: public -/
+/-! ### Byte → integer conversions
+
+`fromBEBytes` (resp. `fromLEBytes`) of an `Array U8 N` produces `BitVec (8 * N)`;
+we reinterpret it via `setWidth _` to fit the target scalar's bit width
+(zero-extending or truncating as needed). Signed types reuse the same bit
+pattern; the `IScalar` viewer reads it as 2's-complement. -/
+
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_u8"]
-axiom rust_primitives.arithmetic.from_be_bytes_u8
-  : Array Std.U8 1#usize → Result Std.U8
+def rust_primitives.arithmetic.from_be_bytes_u8 : Array Std.U8 1#usize → Result Std.U8 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_u8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_u8"]
-axiom rust_primitives.arithmetic.from_le_bytes_u8
-  : Array Std.U8 1#usize → Result Std.U8
+def rust_primitives.arithmetic.from_le_bytes_u8 : Array Std.U8 1#usize → Result Std.U8 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_u16"]
-axiom rust_primitives.arithmetic.from_be_bytes_u16
-  : Array Std.U8 2#usize → Result Std.U16
+def rust_primitives.arithmetic.from_be_bytes_u16 : Array Std.U8 2#usize → Result Std.U16 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_u16"]
-axiom rust_primitives.arithmetic.from_le_bytes_u16
-  : Array Std.U8 2#usize → Result Std.U16
+def rust_primitives.arithmetic.from_le_bytes_u16 : Array Std.U8 2#usize → Result Std.U16 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_u32"]
-axiom rust_primitives.arithmetic.from_be_bytes_u32
-  : Array Std.U8 4#usize → Result Std.U32
+def rust_primitives.arithmetic.from_be_bytes_u32 : Array Std.U8 4#usize → Result Std.U32 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_u32"]
-axiom rust_primitives.arithmetic.from_le_bytes_u32
-  : Array Std.U8 4#usize → Result Std.U32
+def rust_primitives.arithmetic.from_le_bytes_u32 : Array Std.U8 4#usize → Result Std.U32 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_u64"]
-axiom rust_primitives.arithmetic.from_be_bytes_u64
-  : Array Std.U8 8#usize → Result Std.U64
+def rust_primitives.arithmetic.from_be_bytes_u64 : Array Std.U8 8#usize → Result Std.U64 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_u64"]
-axiom rust_primitives.arithmetic.from_le_bytes_u64
-  : Array Std.U8 8#usize → Result Std.U64
+def rust_primitives.arithmetic.from_le_bytes_u64 : Array Std.U8 8#usize → Result Std.U64 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_u128"]
-axiom rust_primitives.arithmetic.from_be_bytes_u128
-  : Array Std.U8 16#usize → Result Std.U128
+def rust_primitives.arithmetic.from_be_bytes_u128 : Array Std.U8 16#usize → Result Std.U128 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_u128"]
-axiom rust_primitives.arithmetic.from_le_bytes_u128
-  : Array Std.U8 16#usize → Result Std.U128
+def rust_primitives.arithmetic.from_le_bytes_u128 : Array Std.U8 16#usize → Result Std.U128 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_usize"]
-axiom rust_primitives.arithmetic.from_be_bytes_usize
-  : Array Std.U8 8#usize → Result Std.Usize
+def rust_primitives.arithmetic.from_be_bytes_usize : Array Std.U8 8#usize → Result Std.Usize :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_usize"]
-axiom rust_primitives.arithmetic.from_le_bytes_usize
-  : Array Std.U8 8#usize → Result Std.Usize
+def rust_primitives.arithmetic.from_le_bytes_usize : Array Std.U8 8#usize → Result Std.Usize :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_i8"]
-axiom rust_primitives.arithmetic.from_be_bytes_i8
-  : Array Std.U8 1#usize → Result Std.I8
+def rust_primitives.arithmetic.from_be_bytes_i8 : Array Std.U8 1#usize → Result Std.I8 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_i8"]
-axiom rust_primitives.arithmetic.from_le_bytes_i8
-  : Array Std.U8 1#usize → Result Std.I8
+def rust_primitives.arithmetic.from_le_bytes_i8 : Array Std.U8 1#usize → Result Std.I8 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_i16"]
-axiom rust_primitives.arithmetic.from_be_bytes_i16
-  : Array Std.U8 2#usize → Result Std.I16
+def rust_primitives.arithmetic.from_be_bytes_i16 : Array Std.U8 2#usize → Result Std.I16 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_i16"]
-axiom rust_primitives.arithmetic.from_le_bytes_i16
-  : Array Std.U8 2#usize → Result Std.I16
+def rust_primitives.arithmetic.from_le_bytes_i16 : Array Std.U8 2#usize → Result Std.I16 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_i32"]
-axiom rust_primitives.arithmetic.from_be_bytes_i32
-  : Array Std.U8 4#usize → Result Std.I32
+def rust_primitives.arithmetic.from_be_bytes_i32 : Array Std.U8 4#usize → Result Std.I32 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_i32"]
-axiom rust_primitives.arithmetic.from_le_bytes_i32
-  : Array Std.U8 4#usize → Result Std.I32
+def rust_primitives.arithmetic.from_le_bytes_i32 : Array Std.U8 4#usize → Result Std.I32 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_i64"]
-axiom rust_primitives.arithmetic.from_be_bytes_i64
-  : Array Std.U8 8#usize → Result Std.I64
+def rust_primitives.arithmetic.from_be_bytes_i64 : Array Std.U8 8#usize → Result Std.I64 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_i64"]
-axiom rust_primitives.arithmetic.from_le_bytes_i64
-  : Array Std.U8 8#usize → Result Std.I64
+def rust_primitives.arithmetic.from_le_bytes_i64 : Array Std.U8 8#usize → Result Std.I64 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_i128"]
-axiom rust_primitives.arithmetic.from_be_bytes_i128
-  : Array Std.U8 16#usize → Result Std.I128
+def rust_primitives.arithmetic.from_be_bytes_i128 : Array Std.U8 16#usize → Result Std.I128 :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_i128"]
-axiom rust_primitives.arithmetic.from_le_bytes_i128
-  : Array Std.U8 16#usize → Result Std.I128
+def rust_primitives.arithmetic.from_le_bytes_i128 : Array Std.U8 16#usize → Result Std.I128 :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_be_bytes_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-177:19
-    Name pattern: [rust_primitives::arithmetic::from_be_bytes_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_be_bytes_isize"]
-axiom rust_primitives.arithmetic.from_be_bytes_isize
-  : Array Std.U8 8#usize → Result Std.Isize
+def rust_primitives.arithmetic.from_be_bytes_isize : Array Std.U8 8#usize → Result Std.Isize :=
+  fun a => ok ⟨(BitVec.fromBEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::from_le_bytes_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 159:30-180:19
-    Name pattern: [rust_primitives::arithmetic::from_le_bytes_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::from_le_bytes_isize"]
-axiom rust_primitives.arithmetic.from_le_bytes_isize
-  : Array Std.U8 8#usize → Result Std.Isize
+def rust_primitives.arithmetic.from_le_bytes_isize : Array Std.U8 8#usize → Result Std.Isize :=
+  fun a => ok ⟨(BitVec.fromLEBytes (a.val.map U8.bv)).setWidth _⟩
 
-/-- [rust_primitives::arithmetic::count_ones_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_u8]
-    Visibility: public -/
+/-! ### Bit-counting and integer logarithm
+
+`count_ones` is `BitVec.cpop` (population count), reinterpreted into 32 bits.
+`leading_zeros` delegates to Aeneas's per-type definitions.
+`ilog2` panics on non-positive inputs (≤ 0 for signed; = 0 for unsigned). -/
+
+private def ucount_ones {ty : UScalarTy} (x : UScalar ty) : Std.U32 :=
+  ⟨x.bv.cpop.setWidth 32⟩
+
+private def icount_ones {ty : IScalarTy} (x : IScalar ty) : Std.U32 :=
+  ⟨x.bv.cpop.setWidth 32⟩
+
 @[rust_fun "rust_primitives::arithmetic::count_ones_u8"]
-axiom rust_primitives.arithmetic.count_ones_u8 : Std.U8 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_u8 : Std.U8 → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_u16"]
-axiom rust_primitives.arithmetic.count_ones_u16 : Std.U16 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_u16 : Std.U16 → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_u32"]
-axiom rust_primitives.arithmetic.count_ones_u32 : Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_u32 : Std.U32 → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_u64"]
-axiom rust_primitives.arithmetic.count_ones_u64 : Std.U64 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_u64 : Std.U64 → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_u128"]
-axiom rust_primitives.arithmetic.count_ones_u128 : Std.U128 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_u128 : Std.U128 → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_usize"]
-axiom rust_primitives.arithmetic.count_ones_usize
-  : Std.Usize → Result Std.U32
+def rust_primitives.arithmetic.count_ones_usize : Std.Usize → Result Std.U32 :=
+  fun x => ok (ucount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_i8"]
-axiom rust_primitives.arithmetic.count_ones_i8 : Std.I8 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_i8 : Std.I8 → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_i16"]
-axiom rust_primitives.arithmetic.count_ones_i16 : Std.I16 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_i16 : Std.I16 → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_i32"]
-axiom rust_primitives.arithmetic.count_ones_i32 : Std.I32 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_i32 : Std.I32 → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_i64"]
-axiom rust_primitives.arithmetic.count_ones_i64 : Std.I64 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_i64 : Std.I64 → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_i128"]
-axiom rust_primitives.arithmetic.count_ones_i128 : Std.I128 → Result Std.U32
+def rust_primitives.arithmetic.count_ones_i128 : Std.I128 → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::count_ones_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 162:16-162:61
-    Name pattern: [rust_primitives::arithmetic::count_ones_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::count_ones_isize"]
-axiom rust_primitives.arithmetic.count_ones_isize
-  : Std.Isize → Result Std.U32
+def rust_primitives.arithmetic.count_ones_isize : Std.Isize → Result Std.U32 :=
+  fun x => ok (icount_ones x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_u8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_u8"]
-axiom rust_primitives.arithmetic.leading_zeros_u8 : Std.U8 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_u8 : Std.U8 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.U8.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_u16"]
-axiom rust_primitives.arithmetic.leading_zeros_u16 : Std.U16 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_u16 : Std.U16 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.U16.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_u32"]
-axiom rust_primitives.arithmetic.leading_zeros_u32 : Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_u32 : Std.U32 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.U32.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_u64"]
-axiom rust_primitives.arithmetic.leading_zeros_u64 : Std.U64 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_u64 : Std.U64 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.U64.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_u128"]
-axiom rust_primitives.arithmetic.leading_zeros_u128
-  : Std.U128 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_u128 : Std.U128 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.U128.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_usize"]
-axiom rust_primitives.arithmetic.leading_zeros_usize
-  : Std.Usize → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_usize : Std.Usize → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.Usize.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_i8"]
-axiom rust_primitives.arithmetic.leading_zeros_i8 : Std.I8 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_i8 : Std.I8 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.I8.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_i16"]
-axiom rust_primitives.arithmetic.leading_zeros_i16 : Std.I16 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_i16 : Std.I16 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.I16.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_i32"]
-axiom rust_primitives.arithmetic.leading_zeros_i32 : Std.I32 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_i32 : Std.I32 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.I32.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_i64"]
-axiom rust_primitives.arithmetic.leading_zeros_i64 : Std.I64 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_i64 : Std.I64 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.I64.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_i128"]
-axiom rust_primitives.arithmetic.leading_zeros_i128
-  : Std.I128 → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_i128 : Std.I128 → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.I128.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::leading_zeros_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 171:16-171:64
-    Name pattern: [rust_primitives::arithmetic::leading_zeros_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::leading_zeros_isize"]
-axiom rust_primitives.arithmetic.leading_zeros_isize
-  : Std.Isize → Result Std.U32
+def rust_primitives.arithmetic.leading_zeros_isize : Std.Isize → Result Std.U32 :=
+  fun x => ok (Aeneas.Std.core.num.Isize.leading_zeros x)
 
-/-- [rust_primitives::arithmetic::ilog2_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_u8]
-    Visibility: public -/
+private def uilog2 {ty : UScalarTy} (x : UScalar ty) : Result Std.U32 :=
+  if x.val = 0 then fail .panic
+  else ok ⟨BitVec.ofNat 32 (Nat.log 2 x.val)⟩
+
+private def iilog2 {ty : IScalarTy} (x : IScalar ty) : Result Std.U32 :=
+  if x.val ≤ 0 then fail .panic
+  else ok ⟨BitVec.ofNat 32 (Nat.log 2 x.val.toNat)⟩
+
 @[rust_fun "rust_primitives::arithmetic::ilog2_u8"]
-axiom rust_primitives.arithmetic.ilog2_u8 : Std.U8 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_u8 : Std.U8 → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_u16"]
-axiom rust_primitives.arithmetic.ilog2_u16 : Std.U16 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_u16 : Std.U16 → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_u32"]
-axiom rust_primitives.arithmetic.ilog2_u32 : Std.U32 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_u32 : Std.U32 → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_u64"]
-axiom rust_primitives.arithmetic.ilog2_u64 : Std.U64 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_u64 : Std.U64 → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_u128"]
-axiom rust_primitives.arithmetic.ilog2_u128 : Std.U128 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_u128 : Std.U128 → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_usize"]
-axiom rust_primitives.arithmetic.ilog2_usize : Std.Usize → Result Std.U32
+def rust_primitives.arithmetic.ilog2_usize : Std.Usize → Result Std.U32 := uilog2
 
-/-- [rust_primitives::arithmetic::ilog2_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_i8"]
-axiom rust_primitives.arithmetic.ilog2_i8 : Std.I8 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_i8 : Std.I8 → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::ilog2_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_i16"]
-axiom rust_primitives.arithmetic.ilog2_i16 : Std.I16 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_i16 : Std.I16 → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::ilog2_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_i32"]
-axiom rust_primitives.arithmetic.ilog2_i32 : Std.I32 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_i32 : Std.I32 → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::ilog2_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_i64"]
-axiom rust_primitives.arithmetic.ilog2_i64 : Std.I64 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_i64 : Std.I64 → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::ilog2_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_i128"]
-axiom rust_primitives.arithmetic.ilog2_i128 : Std.I128 → Result Std.U32
+def rust_primitives.arithmetic.ilog2_i128 : Std.I128 → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::ilog2_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 174:16-174:56
-    Name pattern: [rust_primitives::arithmetic::ilog2_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::ilog2_isize"]
-axiom rust_primitives.arithmetic.ilog2_isize : Std.Isize → Result Std.U32
+def rust_primitives.arithmetic.ilog2_isize : Std.Isize → Result Std.U32 := iilog2
 
-/-- [rust_primitives::arithmetic::to_be_bytes_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_u8]
-    Visibility: public -/
+/-! ### Integer → byte conversions
+
+Each `to_*_bytes_*` reads the underlying `BitVec` of the scalar, calls
+`toBEBytes/toLEBytes` (which produces `List Byte = List (BitVec 8)` of length
+`numBits / 8`), and reinterprets each byte as `U8`. The runtime length check
+`if h : bytes.length = N.val` discharges the `Array T N` proof obligation. -/
+
+private def utoBytes {ty : UScalarTy} (be : Bool) (x : UScalar ty) (N : Std.Usize) :
+    Result (Array Std.U8 N) :=
+  let bytes : List Std.U8 :=
+    (if be then x.bv.toBEBytes else x.bv.toLEBytes).map (fun b => (⟨b⟩ : Std.U8))
+  if h : bytes.length = N.val then ok ⟨bytes, h⟩ else fail .panic
+
+private def itoBytes {ty : IScalarTy} (be : Bool) (x : IScalar ty) (N : Std.Usize) :
+    Result (Array Std.U8 N) :=
+  let bytes : List Std.U8 :=
+    (if be then x.bv.toBEBytes else x.bv.toLEBytes).map (fun b => (⟨b⟩ : Std.U8))
+  if h : bytes.length = N.val then ok ⟨bytes, h⟩ else fail .panic
+
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_u8"]
-axiom rust_primitives.arithmetic.to_be_bytes_u8
-  : Std.U8 → Result (Array Std.U8 1#usize)
+def rust_primitives.arithmetic.to_be_bytes_u8 : Std.U8 → Result (Array Std.U8 1#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_u16"]
-axiom rust_primitives.arithmetic.to_be_bytes_u16
-  : Std.U16 → Result (Array Std.U8 2#usize)
+def rust_primitives.arithmetic.to_be_bytes_u16 : Std.U16 → Result (Array Std.U8 2#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_u32"]
-axiom rust_primitives.arithmetic.to_be_bytes_u32
-  : Std.U32 → Result (Array Std.U8 4#usize)
+def rust_primitives.arithmetic.to_be_bytes_u32 : Std.U32 → Result (Array Std.U8 4#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_u64"]
-axiom rust_primitives.arithmetic.to_be_bytes_u64
-  : Std.U64 → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_be_bytes_u64 : Std.U64 → Result (Array Std.U8 8#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_u128"]
-axiom rust_primitives.arithmetic.to_be_bytes_u128
-  : Std.U128 → Result (Array Std.U8 16#usize)
+def rust_primitives.arithmetic.to_be_bytes_u128 : Std.U128 → Result (Array Std.U8 16#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_usize"]
-axiom rust_primitives.arithmetic.to_be_bytes_usize
-  : Std.Usize → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_be_bytes_usize : Std.Usize → Result (Array Std.U8 8#usize) :=
+  fun x => utoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_i8"]
-axiom rust_primitives.arithmetic.to_be_bytes_i8
-  : Std.I8 → Result (Array Std.U8 1#usize)
+def rust_primitives.arithmetic.to_be_bytes_i8 : Std.I8 → Result (Array Std.U8 1#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_i16"]
-axiom rust_primitives.arithmetic.to_be_bytes_i16
-  : Std.I16 → Result (Array Std.U8 2#usize)
+def rust_primitives.arithmetic.to_be_bytes_i16 : Std.I16 → Result (Array Std.U8 2#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_i32"]
-axiom rust_primitives.arithmetic.to_be_bytes_i32
-  : Std.I32 → Result (Array Std.U8 4#usize)
+def rust_primitives.arithmetic.to_be_bytes_i32 : Std.I32 → Result (Array Std.U8 4#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_i64"]
-axiom rust_primitives.arithmetic.to_be_bytes_i64
-  : Std.I64 → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_be_bytes_i64 : Std.I64 → Result (Array Std.U8 8#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_i128"]
-axiom rust_primitives.arithmetic.to_be_bytes_i128
-  : Std.I128 → Result (Array Std.U8 16#usize)
+def rust_primitives.arithmetic.to_be_bytes_i128 : Std.I128 → Result (Array Std.U8 16#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_be_bytes_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 183:16-183:75
-    Name pattern: [rust_primitives::arithmetic::to_be_bytes_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_be_bytes_isize"]
-axiom rust_primitives.arithmetic.to_be_bytes_isize
-  : Std.Isize → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_be_bytes_isize : Std.Isize → Result (Array Std.U8 8#usize) :=
+  fun x => itoBytes true x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_u8]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_u8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_u8"]
-axiom rust_primitives.arithmetic.to_le_bytes_u8
-  : Std.U8 → Result (Array Std.U8 1#usize)
+def rust_primitives.arithmetic.to_le_bytes_u8 : Std.U8 → Result (Array Std.U8 1#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_u16]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_u16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_u16"]
-axiom rust_primitives.arithmetic.to_le_bytes_u16
-  : Std.U16 → Result (Array Std.U8 2#usize)
+def rust_primitives.arithmetic.to_le_bytes_u16 : Std.U16 → Result (Array Std.U8 2#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_u32]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_u32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_u32"]
-axiom rust_primitives.arithmetic.to_le_bytes_u32
-  : Std.U32 → Result (Array Std.U8 4#usize)
+def rust_primitives.arithmetic.to_le_bytes_u32 : Std.U32 → Result (Array Std.U8 4#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_u64]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_u64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_u64"]
-axiom rust_primitives.arithmetic.to_le_bytes_u64
-  : Std.U64 → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_le_bytes_u64 : Std.U64 → Result (Array Std.U8 8#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_u128]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_u128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_u128"]
-axiom rust_primitives.arithmetic.to_le_bytes_u128
-  : Std.U128 → Result (Array Std.U8 16#usize)
+def rust_primitives.arithmetic.to_le_bytes_u128 : Std.U128 → Result (Array Std.U8 16#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_usize]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_usize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_usize"]
-axiom rust_primitives.arithmetic.to_le_bytes_usize
-  : Std.Usize → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_le_bytes_usize : Std.Usize → Result (Array Std.U8 8#usize) :=
+  fun x => utoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_i8]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_i8"]
-axiom rust_primitives.arithmetic.to_le_bytes_i8
-  : Std.I8 → Result (Array Std.U8 1#usize)
+def rust_primitives.arithmetic.to_le_bytes_i8 : Std.I8 → Result (Array Std.U8 1#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_i16"]
-axiom rust_primitives.arithmetic.to_le_bytes_i16
-  : Std.I16 → Result (Array Std.U8 2#usize)
+def rust_primitives.arithmetic.to_le_bytes_i16 : Std.I16 → Result (Array Std.U8 2#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_i32"]
-axiom rust_primitives.arithmetic.to_le_bytes_i32
-  : Std.I32 → Result (Array Std.U8 4#usize)
+def rust_primitives.arithmetic.to_le_bytes_i32 : Std.I32 → Result (Array Std.U8 4#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_i64"]
-axiom rust_primitives.arithmetic.to_le_bytes_i64
-  : Std.I64 → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_le_bytes_i64 : Std.I64 → Result (Array Std.U8 8#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_i128"]
-axiom rust_primitives.arithmetic.to_le_bytes_i128
-  : Std.I128 → Result (Array Std.U8 16#usize)
+def rust_primitives.arithmetic.to_le_bytes_i128 : Std.I128 → Result (Array Std.U8 16#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::to_le_bytes_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 186:16-186:75
-    Name pattern: [rust_primitives::arithmetic::to_le_bytes_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::to_le_bytes_isize"]
-axiom rust_primitives.arithmetic.to_le_bytes_isize
-  : Std.Isize → Result (Array Std.U8 8#usize)
+def rust_primitives.arithmetic.to_le_bytes_isize : Std.Isize → Result (Array Std.U8 8#usize) :=
+  fun x => itoBytes false x _
 
-/-- [rust_primitives::arithmetic::abs_i8]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_i8]
-    Visibility: public -/
+/-! ### Absolute value (wrapping at MIN). -/
+
+private def iabs {ty : IScalarTy} (x : IScalar ty) : IScalar ty :=
+  ⟨BitVec.ofNat _ x.val.natAbs⟩
+
 @[rust_fun "rust_primitives::arithmetic::abs_i8"]
-axiom rust_primitives.arithmetic.abs_i8 : Std.I8 → Result Std.I8
+def rust_primitives.arithmetic.abs_i8 : Std.I8 → Result Std.I8 := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::abs_i16]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_i16]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::abs_i16"]
-axiom rust_primitives.arithmetic.abs_i16 : Std.I16 → Result Std.I16
+def rust_primitives.arithmetic.abs_i16 : Std.I16 → Result Std.I16 := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::abs_i32]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_i32]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::abs_i32"]
-axiom rust_primitives.arithmetic.abs_i32 : Std.I32 → Result Std.I32
+def rust_primitives.arithmetic.abs_i32 : Std.I32 → Result Std.I32 := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::abs_i64]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_i64]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::abs_i64"]
-axiom rust_primitives.arithmetic.abs_i64 : Std.I64 → Result Std.I64
+def rust_primitives.arithmetic.abs_i64 : Std.I64 → Result Std.I64 := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::abs_i128]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_i128]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::abs_i128"]
-axiom rust_primitives.arithmetic.abs_i128 : Std.I128 → Result Std.I128
+def rust_primitives.arithmetic.abs_i128 : Std.I128 → Result Std.I128 := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::abs_isize]:
-    Source: 'rust_primitives/src/lib.rs', lines 197:20-197:39
-    Name pattern: [rust_primitives::arithmetic::abs_isize]
-    Visibility: public -/
 @[rust_fun "rust_primitives::arithmetic::abs_isize"]
-axiom rust_primitives.arithmetic.abs_isize : Std.Isize → Result Std.Isize
+def rust_primitives.arithmetic.abs_isize : Std.Isize → Result Std.Isize := fun x => ok (iabs x)
 
-/-- [rust_primitives::arithmetic::SIZE_BITS]
-    Source: 'rust_primitives/src/lib.rs', lines 208:4-208:28
-    Name pattern: [rust_primitives::arithmetic::SIZE_BITS]
-    Visibility: public -/
+/-! ### Platform-dependent constants. -/
+
 @[rust_const "rust_primitives::arithmetic::SIZE_BITS"]
-axiom rust_primitives.arithmetic.SIZE_BITS : Result Std.U32
+def rust_primitives.arithmetic.SIZE_BITS : Result Std.U32 :=
+  ok ⟨BitVec.ofNat 32 System.Platform.numBits⟩
 
-/-- [rust_primitives::arithmetic::USIZE_MAX]
-    Source: 'rust_primitives/src/lib.rs', lines 209:4-209:30
-    Name pattern: [rust_primitives::arithmetic::USIZE_MAX]
-    Visibility: public -/
 @[rust_const "rust_primitives::arithmetic::USIZE_MAX"]
-axiom rust_primitives.arithmetic.USIZE_MAX : Result Std.Usize
+def rust_primitives.arithmetic.USIZE_MAX : Result Std.Usize :=
+  ok ⟨BitVec.allOnes _⟩
 
-/-- [rust_primitives::arithmetic::ISIZE_MAX]
-    Source: 'rust_primitives/src/lib.rs', lines 210:4-210:30
-    Name pattern: [rust_primitives::arithmetic::ISIZE_MAX]
-    Visibility: public -/
 @[rust_const "rust_primitives::arithmetic::ISIZE_MAX"]
-axiom rust_primitives.arithmetic.ISIZE_MAX : Result Std.Isize
+def rust_primitives.arithmetic.ISIZE_MAX : Result Std.Isize :=
+  ok ⟨BitVec.ofInt _ (IScalar.max .Isize)⟩
 
-/-- [rust_primitives::arithmetic::ISIZE_MIN]
-    Source: 'rust_primitives/src/lib.rs', lines 211:4-211:30
-    Name pattern: [rust_primitives::arithmetic::ISIZE_MIN]
-    Visibility: public -/
 @[rust_const "rust_primitives::arithmetic::ISIZE_MIN"]
-axiom rust_primitives.arithmetic.ISIZE_MIN : Result Std.Isize
+def rust_primitives.arithmetic.ISIZE_MIN : Result Std.Isize :=
+  ok ⟨BitVec.ofInt _ (IScalar.min .Isize)⟩
 
-/-- [alloc::string::{alloc::string::String}::new]:
-    Source: '/rustc/library/alloc/src/string.rs', lines 437:4-437:32
-    Name pattern: [alloc::string::{alloc::string::String}::new]
-    Visibility: public -/
+/-! ## String and additional sequence operations -/
+
 @[rust_fun "alloc::string::{alloc::string::String}::new"]
-axiom alloc.string.String.new : Result String
+def alloc.string.String.new : Result String := ok ""
 
-/-- [rust_primitives::sequence::seq_empty]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 48:4-48:35
-    Name pattern: [rust_primitives::sequence::seq_empty]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_empty"]
-axiom rust_primitives.sequence.seq_empty
-  (T : Type) : Result (rust_primitives.sequence.Seq T)
+def rust_primitives.sequence.seq_empty
+  (T : Type) : Result (rust_primitives.sequence.Seq T) := ok (Slice.new T)
 
-/-- [rust_primitives::sequence::seq_from_boxed_slice]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 54:4-54:57
-    Name pattern: [rust_primitives::sequence::seq_from_boxed_slice]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_from_boxed_slice"]
-axiom rust_primitives.sequence.seq_from_boxed_slice
-  {T : Type} : Slice T → Result (rust_primitives.sequence.Seq T)
+def rust_primitives.sequence.seq_from_boxed_slice
+  {T : Type} : Slice T → Result (rust_primitives.sequence.Seq T) := fun s => ok s
 
-/-- [rust_primitives::sequence::seq_to_slice]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 60:4-60:46
-    Name pattern: [rust_primitives::sequence::seq_to_slice]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_to_slice"]
-axiom rust_primitives.sequence.seq_to_slice
-  {T : Type} : rust_primitives.sequence.Seq T → Result (Slice T)
+def rust_primitives.sequence.seq_to_slice
+  {T : Type} : rust_primitives.sequence.Seq T → Result (Slice T) := fun s => ok s
 
-/-- [rust_primitives::sequence::seq_concat]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 63:4-63:58
-    Name pattern: [rust_primitives::sequence::seq_concat]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_concat"]
-axiom rust_primitives.sequence.seq_concat
+def rust_primitives.sequence.seq_concat
   {T : Type} :
   rust_primitives.sequence.Seq T → rust_primitives.sequence.Seq T → Result
-    ((rust_primitives.sequence.Seq T) × (rust_primitives.sequence.Seq T))
+    ((rust_primitives.sequence.Seq T) × (rust_primitives.sequence.Seq T)) :=
+  fun s1 s2 =>
+    let combined := s1.val ++ s2.val
+    if h : combined.length ≤ Usize.max then ok (⟨combined, h⟩, Slice.new T)
+    else fail .panic
 
-/-- [rust_primitives::sequence::seq_extend]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 66:4-68:17
-    Name pattern: [rust_primitives::sequence::seq_extend]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_extend"]
-axiom rust_primitives.sequence.seq_extend
+def rust_primitives.sequence.seq_extend
   {T : Type} (corecloneCloneInst : core.clone.Clone T) :
   rust_primitives.sequence.Seq T → Slice T → Result
-    (rust_primitives.sequence.Seq T)
+    (rust_primitives.sequence.Seq T) := fun s src =>
+  let combined := s.val ++ src.val
+  if h : combined.length ≤ Usize.max then ok ⟨combined, h⟩
+  else fail .panic
 
-/-- [rust_primitives::sequence::seq_push]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 72:4-72:45
-    Name pattern: [rust_primitives::sequence::seq_push]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_push"]
-axiom rust_primitives.sequence.seq_push
+def rust_primitives.sequence.seq_push
   {T : Type} :
-  rust_primitives.sequence.Seq T → T → Result (rust_primitives.sequence.Seq
-    T)
+  rust_primitives.sequence.Seq T → T → Result (rust_primitives.sequence.Seq T) :=
+  fun s x =>
+    let extended := s.val ++ [x]
+    if h : extended.length ≤ Usize.max then ok ⟨extended, h⟩
+    else fail .panic
 
-/-- [rust_primitives::sequence::seq_create]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 78:4-78:57
-    Name pattern: [rust_primitives::sequence::seq_create]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_create"]
-axiom rust_primitives.sequence.seq_create
+def rust_primitives.sequence.seq_create
   {T : Type} (corecloneCloneInst : core.clone.Clone T) :
-  T → Std.Usize → Result (rust_primitives.sequence.Seq T)
+  T → Std.Usize → Result (rust_primitives.sequence.Seq T) := fun x n =>
+  let l := List.replicate n.val x
+  if h : l.length ≤ Usize.max then ok ⟨l, h⟩
+  else fail .panic
 
-/-- [rust_primitives::sequence::seq_drain]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 84:4-84:69
-    Name pattern: [rust_primitives::sequence::seq_drain]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_drain"]
-axiom rust_primitives.sequence.seq_drain
+def rust_primitives.sequence.seq_drain
   {T : Type} :
   rust_primitives.sequence.Seq T → Std.Usize → Std.Usize → Result
-    ((rust_primitives.sequence.Seq T) × (rust_primitives.sequence.Seq T))
+    ((rust_primitives.sequence.Seq T) × (rust_primitives.sequence.Seq T)) :=
+  fun s start «end» =>
+    if start.val ≤ «end».val ∧ «end».val ≤ s.length then
+      let drained := (s.val.drop start.val).take («end».val - start.val)
+      let remaining := s.val.take start.val ++ s.val.drop «end».val
+      if h : remaining.length ≤ Usize.max ∧ drained.length ≤ Usize.max then
+        ok (⟨remaining, h.1⟩, ⟨drained, h.2⟩)
+      else fail .panic
+    else fail .panic
 
-/-- [rust_primitives::sequence::seq_index]:
-    Source: '/home/alex/Projects/rust-core-models/lean/rust_primitives/src/lib.rs', lines 90:4-90:51
-    Name pattern: [rust_primitives::sequence::seq_index]
-    Visibility: public -/
 @[rust_fun "rust_primitives::sequence::seq_index"]
-axiom rust_primitives.sequence.seq_index
-  {T : Type} : rust_primitives.sequence.Seq T → Std.Usize → Result T
+def rust_primitives.sequence.seq_index
+  {T : Type} : rust_primitives.sequence.Seq T → Std.Usize → Result T :=
+  Slice.index_usize
 
 end CoreModels
