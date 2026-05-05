@@ -458,6 +458,21 @@ structure iter.traits.iterator.IteratorMethods (Self : Type) (Self_Clause0_Item
   collect : forall {B : Type} (collectFromIteratorInst :
     iter.traits.collect.FromIterator B Self_Clause0_Item), Self → Result B
 
+/-- Trait declaration: [core_models::iter::step::Step]
+    Source: 'core-models/src/core/iter.rs', lines 728:4-748:5
+    Visibility: public -/
+structure iter.step.Step (Self : Type) where
+  cloneCloneInst : clone.Clone Self
+  cmpPartialOrdInst : cmp.PartialOrd Self Self
+  steps_between : Self → Self → Result (Std.Usize × (option.Option
+    Std.Usize))
+  forward_checked : Self → Std.Usize → Result (option.Option Self)
+  backward_checked : Self → Std.Usize → Result (option.Option Self)
+  forward : Self → Std.Usize → Result Self
+  forward_unchecked : Self → Std.Usize → Result Self
+  backward : Self → Std.Usize → Result Self
+  backward_unchecked : Self → Std.Usize → Result Self
+
 /-- Trait declaration: [core_models::marker::Copy]
     Source: 'core-models/src/core/marker.rs', lines 4:0-4:24
     Visibility: public -/
@@ -510,73 +525,73 @@ structure num.error.ParseIntError where
   kind : num.error.IntErrorKind
 
 /-- [core_models::num::u8]
-    Source: 'core-models/src/core/num/mod.rs', lines 392:0-392:14
+    Source: 'core-models/src/core/num/mod.rs', lines 451:0-451:14
     Visibility: public -/
 @[reducible]
 def num.u8 := Unit
 
 /-- [core_models::num::u16]
-    Source: 'core-models/src/core/num/mod.rs', lines 395:0-395:15
+    Source: 'core-models/src/core/num/mod.rs', lines 454:0-454:15
     Visibility: public -/
 @[reducible]
 def num.u16 := Unit
 
 /-- [core_models::num::u32]
-    Source: 'core-models/src/core/num/mod.rs', lines 398:0-398:15
+    Source: 'core-models/src/core/num/mod.rs', lines 457:0-457:15
     Visibility: public -/
 @[reducible]
 def num.u32 := Unit
 
 /-- [core_models::num::u64]
-    Source: 'core-models/src/core/num/mod.rs', lines 401:0-401:15
+    Source: 'core-models/src/core/num/mod.rs', lines 460:0-460:15
     Visibility: public -/
 @[reducible]
 def num.u64 := Unit
 
 /-- [core_models::num::u128]
-    Source: 'core-models/src/core/num/mod.rs', lines 404:0-404:16
+    Source: 'core-models/src/core/num/mod.rs', lines 463:0-463:16
     Visibility: public -/
 @[reducible]
 def num.u128 := Unit
 
 /-- [core_models::num::usize]
-    Source: 'core-models/src/core/num/mod.rs', lines 407:0-407:17
+    Source: 'core-models/src/core/num/mod.rs', lines 466:0-466:17
     Visibility: public -/
 @[reducible]
 def num.usize := Unit
 
 /-- [core_models::num::i8]
-    Source: 'core-models/src/core/num/mod.rs', lines 410:0-410:14
+    Source: 'core-models/src/core/num/mod.rs', lines 469:0-469:14
     Visibility: public -/
 @[reducible]
 def num.i8 := Unit
 
 /-- [core_models::num::i16]
-    Source: 'core-models/src/core/num/mod.rs', lines 413:0-413:15
+    Source: 'core-models/src/core/num/mod.rs', lines 472:0-472:15
     Visibility: public -/
 @[reducible]
 def num.i16 := Unit
 
 /-- [core_models::num::i32]
-    Source: 'core-models/src/core/num/mod.rs', lines 416:0-416:15
+    Source: 'core-models/src/core/num/mod.rs', lines 475:0-475:15
     Visibility: public -/
 @[reducible]
 def num.i32 := Unit
 
 /-- [core_models::num::i64]
-    Source: 'core-models/src/core/num/mod.rs', lines 419:0-419:15
+    Source: 'core-models/src/core/num/mod.rs', lines 478:0-478:15
     Visibility: public -/
 @[reducible]
 def num.i64 := Unit
 
 /-- [core_models::num::i128]
-    Source: 'core-models/src/core/num/mod.rs', lines 422:0-422:16
+    Source: 'core-models/src/core/num/mod.rs', lines 481:0-481:16
     Visibility: public -/
 @[reducible]
 def num.i128 := Unit
 
 /-- [core_models::num::isize]
-    Source: 'core-models/src/core/num/mod.rs', lines 425:0-425:17
+    Source: 'core-models/src/core/num/mod.rs', lines 484:0-484:17
     Visibility: public -/
 @[reducible]
 def num.isize := Unit

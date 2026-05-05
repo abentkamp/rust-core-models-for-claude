@@ -24,65 +24,6 @@ instance I64.Insts.Core_modelsCmpPartialEqI64     : cmp.PartialEq I64   I64   :=
 instance I128.Insts.Core_modelsCmpPartialEqI128   : cmp.PartialEq I128  I128  := { eq := fun x y => ok (x == y) }
 instance Isize.Insts.Core_modelsCmpPartialEqIsize : cmp.PartialEq Isize Isize := { eq := fun x y => ok (x == y) }
 
-/-! ## core::iter::range — Range iteration
-
-Aeneas extracts `for i in lo..hi { … }` to a loop driven by
-`core.iter.range.IteratorRange.next`, which in turn uses a
-`core.iter.range.Step` dictionary. We provide both, plus a `StepUsize`
-instance, so that downstream extracted code that iterates over `Range<usize>`
-type-checks. -/
-
-namespace iter.range
-
-structure Step (Self : Type) where
-  cloneInst       : clone.Clone Self
-  partialOrdInst  : cmp.PartialOrd Self Self
-  steps_between   : Self → Self → Aeneas.Std.Result (Aeneas.Std.Usize × (Option Aeneas.Std.Usize))
-  forward_checked : Self → Aeneas.Std.Usize → Aeneas.Std.Result (Option Self)
-  backward_checked: Self → Aeneas.Std.Usize → Aeneas.Std.Result (Option Self)
-
-/-- Step instance for `Usize`. -/
-def StepUsize : Step Aeneas.Std.Usize := {
-  cloneInst       := { clone := fun x => Aeneas.Std.Result.ok x}
-  partialOrdInst  := {
-    PartialEqInst := { eq := fun x y => ok (x == y) }
-    partial_cmp := fun x y =>
-      ok (option.Option.Some
-        (match compare x.val y.val with
-        | .lt => cmp.Ordering.Less
-        | .eq => cmp.Ordering.Equal
-        | .gt => cmp.Ordering.Greater))
-  }
-  steps_between   := Aeneas.Std.core.iter.range.StepUsize.steps_between
-  forward_checked := Aeneas.Std.core.iter.range.StepUsize.forward_checked
-  backward_checked := Aeneas.Std.core.iter.range.StepUsize.backward_checked
-}
-
-/-- The `Iterator::next` implementation for `core::ops::range::Range<A>`,
-    parameterised over the `Step` dictionary. -/
-def IteratorRange.next {A : Type} (StepInst : Step A) :
-    ops.range.Range A → Aeneas.Std.Result ((Option A) × ops.range.Range A) := fun range => do
-  let cmp ← StepInst.partialOrdInst.partial_cmp range.start range.«end»
-  let isLess : Bool := match cmp with
-    | Option.some o => match o with
-                       | core_models.cmp.Ordering.Less => true
-                       | _ => false
-    | _ => false
-  if isLess then
-    let cur ← StepInst.cloneInst.clone range.start
-    let next? ← StepInst.forward_checked cur 1#usize
-    match next? with
-    | Option.none      => .fail .panic
-    | Option.some next => .ok (Option.some cur, { range with start := next })
-  else .ok (Option.none, range)
-
-end iter.range
-
-abbrev ops.range.Range.Insts.Core_modelsIterTraitsIteratorIterator.next :=
-  @core_models.iter.range.IteratorRange.next
-
-abbrev Usize.Insts.Core_modelsIterRangeStep := core_models.iter.range.StepUsize
-
 /-! ## Slice -/
 
 def slice.Slice.len {T : Type u} (v : Aeneas.Std.Slice T) : Aeneas.Std.Result Usize :=

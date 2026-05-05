@@ -141,14 +141,72 @@ int_from! {
     i16 i32 i32 i64 i64 i64 i128 i128 i128 i128 i128  isize isize,
 }
 
+int_from! {
+    u8  u8  u8  u8   u8    u16 u16 u16  u32 u32  u64,
+    i16 i32 i64 i128 isize i32 i64 i128 i64 i128 i128,
+}
+
 int_try_from! {
     u16 u32 u32 u32   u64 u64 u64 u64   u128 u128 u128 u128 u128  usize usize usize usize,
     u8  u8  u16 usize u8  u16 u32 usize u8   u16  u32  u64  usize u8    u16   u32   u64,
 }
 
 int_try_from! {
-    i16 i32 i32 i32   i64 i64 i64 i64   i128 i128 i128 i128 i128  isize isize isize isize,
-    i8  i8  i16 isize i8  i16 i32 isize i8   i16  i32  i64  isize i8    i16   i32   i64,
+    i16 i32 i32 i64 i64 i64 i64   i128 i128 i128 i128 i128  isize isize isize isize,
+    i8  i8  i16 i8  i16 i32 isize i8   i16  i32  i64  isize i8    i16   i32   i64,
+}
+
+macro_rules! int_try_from_u_to_i {
+    (
+        $($From_t: ident)*,
+        $($To_t: ident)*,
+    ) => {
+        $(
+            #[cfg_attr(hax_backend_lean, hax_lib::exclude)]
+            impl TryFrom<$From_t> for $To_t {
+                type Error = TryFromIntError;
+                fn try_from(x: $From_t) -> Result<$To_t, TryFromIntError> {
+                    if x > ($To_t::MAX as $From_t) {
+                        Result::Err(TryFromIntError(()))
+                    } else {
+                        Result::Ok(x as $To_t)
+                    }
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! int_try_from_i_to_u {
+    (
+        $($From_t: ident)*,
+        $($To_t: ident)*,
+    ) => {
+        $(
+            #[cfg_attr(hax_backend_lean, hax_lib::exclude)]
+            impl TryFrom<$From_t> for $To_t {
+                type Error = TryFromIntError;
+                #[allow(unused_comparisons)]
+                fn try_from(x: $From_t) -> Result<$To_t, TryFromIntError> {
+                    if x < 0 || (x as u128) > ($To_t::MAX as u128) {
+                        Result::Err(TryFromIntError(()))
+                    } else {
+                        Result::Ok(x as $To_t)
+                    }
+                }
+            }
+        )*
+    }
+}
+
+int_try_from_u_to_i! {
+    u8   u16 u16 u32 u32 u32 u64 u64 u64 u64  u128 u128 u128 u128 u128  usize usize usize usize usize,
+    i8   i8  i16 i8  i16 i32 i8  i16 i32 i64  i8   i16  i32  i64  i128  i8    i16   i32   i64   isize,
+}
+
+int_try_from_i_to_u! {
+    i8  i8  i8  i8  i8   i8    i16 i16 i16 i16 i16  i16   i32 i32 i32 i32 i32  i32   i64 i64 i64 i64 i64  i64   i128 i128 i128 i128 i128 i128  isize isize isize isize isize isize,
+    u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8   u16  u32  u64  u128 usize u8    u16   u32   u64   u128  usize,
 }
 
 #[cfg(test)]
@@ -223,6 +281,11 @@ mod tests {
         i16 i32 i32 i64 i64 i64 i128 i128 i128 i128 isize isize,
     }
 
+    int_from_test! {
+        u8  u8  u8  u8   u8    u16 u16 u16  u32 u32  u64,
+        i16 i32 i64 i128 isize i32 i64 i128 i64 i128 i128,
+    }
+
     int_try_from_test! {
         u16 u32 u32 u32   u64 u64 u64 u64   u128 u128 u128 u128 u128  usize usize usize usize usize,
         u8  u8  u16 usize u8  u16 u32 usize u8   u16  u32  u64  usize u8    u16   u32   u64   u128,
@@ -231,6 +294,37 @@ mod tests {
     int_try_from_test! {
         i16 i32 i32 i32   i64 i64 i64 i64   i128 i128 i128 i128 i128  isize isize isize isize isize,
         i8  i8  i16 isize i8  i16 i32 isize i8   i16  i32  i64  isize i8    i16   i32   i64   i128,
+    }
+
+    macro_rules! int_try_from_mixed_test {
+        (
+            $($From_t: ident)*,
+            $($To_t: ident)*,
+        ) => {
+            paste!{
+                $(
+                    proptest!{
+                        #[test]
+                        fn [<test_try_from_$From_t _to_ $To_t>](x in any::<$From_t>()) {
+                            prop_assert_eq!(
+                                <$To_t as super::TryFrom<$From_t>>::try_from(x.inject()),
+                                $To_t::try_from(x).inject()
+                            );
+                        }
+                    }
+                )*
+            }
+        }
+    }
+
+    int_try_from_mixed_test! {
+        u8   u16 u16 u32 u32 u32 u64 u64 u64 u64  u128 u128 u128 u128 u128  usize usize usize usize usize,
+        i8   i8  i16 i8  i16 i32 i8  i16 i32 i64  i8   i16  i32  i64  i128  i8    i16   i32   i64   isize,
+    }
+
+    int_try_from_mixed_test! {
+        i8  i8  i8  i8  i8   i8    i16 i16 i16 i16 i16  i16   i32 i32 i32 i32 i32  i32   i64 i64 i64 i64 i64  i64   i128 i128 i128 i128 i128 i128  isize isize isize isize isize isize,
+        u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8  u16 u32 u64 u128 usize u8   u16  u32  u64  u128 usize u8    u16   u32   u64   u128  usize,
     }
 
     proptest! {

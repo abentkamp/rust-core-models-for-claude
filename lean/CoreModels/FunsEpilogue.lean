@@ -1,5 +1,42 @@
 import CoreModels.Alloc.Funs
 
+namespace core_models
+
+/-! ## core::iter::range — Range iteration
+
+Aeneas extracts `for i in lo..hi { … }` to a loop driven by
+`core.iter.range.IteratorRange.next`, which in turn uses a
+`core.iter.range.Step` dictionary. We provide both, plus a `StepUsize`
+instance, so that downstream extracted code that iterates over `Range<usize>`
+type-checks. -/
+
+namespace iter.step
+
+/-- The `Iterator::next` implementation for `core::ops::range::Range<A>`,
+    parameterised over the `Step` dictionary. -/
+def IteratorRange.next {A : Type} (StepInst : Step A) :
+    ops.range.Range A → Aeneas.Std.Result ((Option A) × ops.range.Range A) := fun range => do
+  let cmp ← StepInst.cmpPartialOrdInst.partial_cmp range.start range.«end»
+  let isLess : Bool := match cmp with
+    | Option.some o => match o with
+                       | core_models.cmp.Ordering.Less => true
+                       | _ => false
+    | _ => false
+  if isLess then
+    let cur ← StepInst.cloneCloneInst.clone range.start
+    let next? ← StepInst.forward_checked cur 1#usize
+    match next? with
+    | Option.none      => .fail .panic
+    | Option.some next => .ok (Option.some cur, { range with start := next })
+  else .ok (Option.none, range)
+
+end iter.step
+
+abbrev ops.range.Range.Insts.Core_modelsIterTraitsIteratorIterator.next :=
+  @iter.step.IteratorRange.next
+
+end core_models
+
 namespace alloc
 
 /-! ## `[T]::to_vec` and `Box<[T]>::into_vec`

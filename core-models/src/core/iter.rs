@@ -720,6 +720,237 @@ pub mod adapters {
     }
 }
 
+pub mod step {
+    use crate::clone::Clone;
+    use crate::cmp::PartialOrd;
+    use crate::option::Option;
+    /// See [`std::iter::Step`]
+    pub trait Step: Clone + PartialOrd<Self> + Sized {
+        fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>);
+        fn forward_checked(start: Self, count: usize) -> Option<Self>;
+        fn backward_checked(start: Self, count: usize) -> Option<Self>;
+
+        fn forward(start: Self, count: usize) -> Self {
+            Step::forward_checked(start, count).expect("overflow in `Step::forward`")
+        }
+
+        unsafe fn forward_unchecked(start: Self, count: usize) -> Self {
+            Step::forward(start, count)
+        }
+
+        fn backward(start: Self, count: usize) -> Self {
+            Step::backward_checked(start, count).expect("overflow in `Step::backward`")
+        }
+
+        unsafe fn backward_unchecked(start: Self, count: usize) -> Self {
+            Step::backward(start, count)
+        }
+    }
+
+    macro_rules! step_signed_methods {
+        ($Name:ty, $u:ty) => {
+            unsafe fn forward_unchecked(start: Self, n: usize) -> Self {
+                unsafe { <$Name>::checked_add_unsigned(start, n as $u).unwrap() }
+            }
+
+            unsafe fn backward_unchecked(start: Self, n: usize) -> Self {
+                unsafe { <$Name>::checked_sub_unsigned(start, n as $u).unwrap() }
+            }
+        };
+    }
+
+    macro_rules! step_unsigned_methods {
+        ($Name:ty) => {
+            unsafe fn forward_unchecked(start: Self, n: usize) -> Self {
+                unsafe { <$Name>::unchecked_add(start, n as Self) }
+            }
+
+            unsafe fn backward_unchecked(start: Self, n: usize) -> Self {
+                unsafe { <$Name>::unchecked_sub(start, n as Self) }
+            }
+        };
+    }
+
+    macro_rules! step_identical_methods {
+        ($Name:ty) => {
+            fn forward(start: Self, n: usize) -> Self {
+                Self::forward_checked(start, n).unwrap()
+            }
+
+            fn backward(start: Self, n: usize) -> Self {
+                Self::backward_checked(start, n).unwrap()
+            }
+        };
+    }
+
+    macro_rules! step_integer_impls {
+        {
+            narrower than or same width as usize:
+                $( [ $UName:ty, $u_narrower:ty, $IName:ty, $i_narrower:ty ] ),+;
+            wider than usize:
+                $( [ $UName_wide:ty, $u_wider:ty, $IName_wide:ty, $i_wider:ty ] ),+;
+        } => {
+            $(
+                impl Step for $u_narrower {
+                    step_identical_methods!($UName);
+                    step_unsigned_methods!($UName);
+
+                    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+                        if *start <= *end {
+                            // This relies on $u_narrower <= usize
+                            let steps = (*end - *start) as usize;
+                            (steps, Option::Some(steps))
+                        } else {
+                            (0, Option::None)
+                        }
+                    }
+
+                    fn forward_checked(start: Self, n: usize) -> Option<Self> {
+                        match <Self as core::convert::TryFrom<usize>>::try_from(n) {
+                            Ok(n) => <$UName>::checked_add(start, n),
+                            Err(_) => Option::None, // if n is out of range, `unsigned_start + n` is too
+                        }
+                    }
+
+                    fn backward_checked(start: Self, n: usize) -> Option<Self> {
+                        match <Self as core::convert::TryFrom<usize>>::try_from(n) {
+                            Ok(n) => <$UName>::checked_sub(start, n),
+                            Err(_) => Option::None, // if n is out of range, `unsigned_start - n` is too
+                        }
+                    }
+                }
+
+                impl Step for $i_narrower {
+                    step_identical_methods!($IName);
+                    step_signed_methods!($IName, $u_narrower);
+
+                    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+                        if *start <= *end {
+                            // This relies on $i_narrower <= usize.
+                            // Casting to isize extends the width but preserves the sign.
+                            // Use wrapping_sub in isize space and cast to usize to compute
+                            // the difference that might not fit inside the range of isize.
+                            let steps = crate::num::isize::wrapping_sub(*end as isize, *start as isize) as usize;
+                            (steps, Option::Some(steps))
+                        } else {
+                            (0, Option::None)
+                        }
+                    }
+
+                    fn forward_checked(start: Self, n: usize) -> Option<Self> {
+                        match <$u_narrower as core::convert::TryFrom<usize>>::try_from(n) {
+                            Ok(n) => {
+                                // Wrapping handles cases like
+                                // `Step::forward(-120_i8, 200) == Some(80_i8)`,
+                                // even though 200 is out of range for i8.
+                                let wrapped = <$IName>::wrapping_add(start, n as Self);
+                                if wrapped >= start {
+                                    Option::Some(wrapped)
+                                } else {
+                                    Option::None // Addition overflowed
+                                }
+                            }
+                            // If n is out of range of e.g. u8,
+                            // then it is bigger than the entire range for i8 is wide
+                            // so `any_i8 + n` necessarily overflows i8.
+                            Err(_) => Option::None,
+                        }
+                    }
+
+                    fn backward_checked(start: Self, n: usize) -> Option<Self> {
+                        match <$u_narrower as core::convert::TryFrom<usize>>::try_from(n) {
+                            Ok(n) => {
+                                // Wrapping handles cases like
+                                // `Step::forward(-120_i8, 200) == Some(80_i8)`,
+                                // even though 200 is out of range for i8.
+                                let wrapped = <$IName>::wrapping_sub(start, n as Self);
+                                if wrapped <= start {
+                                    Option::Some(wrapped)
+                                } else {
+                                    Option::None // Subtraction overflowed
+                                }
+                            }
+                            // If n is out of range of e.g. u8,
+                            // then it is bigger than the entire range for i8 is wide
+                            // so `any_i8 - n` necessarily overflows i8.
+                            Err(_) => Option::None,
+                        }
+                    }
+                }
+            )+
+
+            $(
+                impl Step for $u_wider {
+                    step_identical_methods!($UName_wide);
+                    step_unsigned_methods!($UName_wide);
+
+                    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+                        if *start <= *end {
+                            match <usize as core::convert::TryFrom<Self>>::try_from(*end - *start) {
+                                Ok(steps) => (steps, Option::Some(steps)),
+                                Err(_) => (usize::MAX, Option::None),
+                            }
+                        } else {
+                            (0, Option::None)
+                        }
+                    }
+
+                    fn forward_checked(start: Self, n: usize) -> Option<Self> {
+                        <$UName_wide>::checked_add(start, n as Self)
+                    }
+
+                    fn backward_checked(start: Self, n: usize) -> Option<Self> {
+                        <$UName_wide>::checked_sub(start, n as Self)
+                    }
+                }
+
+                impl Step for $i_wider {
+                    step_identical_methods!($IName_wide);
+                    step_signed_methods!($IName_wide, $u_wider);
+
+                    fn steps_between(start: &Self, end: &Self) -> (usize, Option<usize>) {
+                        if *start <= *end {
+                            match <$IName_wide>::checked_sub(*end, *start) {
+                                Option::Some(result) => {
+                                    match <usize as core::convert::TryFrom<$i_wider>>::try_from(result) {
+                                        Ok(steps) => (steps, Option::Some(steps)),
+                                        Err(_) => (usize::MAX, Option::None),
+                                    }
+                                }
+                                // If the difference is too big for e.g. i128,
+                                // it's also gonna be too big for usize with fewer bits.
+                                Option::None => (usize::MAX, Option::None),
+                            }
+                        } else {
+                            (0, Option::None)
+                        }
+                    }
+
+                    fn forward_checked(start: Self, n: usize) -> Option<Self> {
+                        <$IName_wide>::checked_add(start, n as Self)
+                    }
+
+                    fn backward_checked(start: Self, n: usize) -> Option<Self> {
+                        <$IName_wide>::checked_sub(start, n as Self)
+                    }
+                }
+            )+
+        };
+    }
+
+    // Assuming usize to be 64 bits
+    step_integer_impls! {
+        narrower than or same width as usize:
+            [crate::num::u8, core::primitive::u8, crate::num::i8, core::primitive::i8],
+            [crate::num::u16, core::primitive::u16, crate::num::i16, core::primitive::i16],
+            [crate::num::u32, core::primitive::u32, crate::num::i32, core::primitive::i32],
+            [crate::num::u64, core::primitive::u64, crate::num::i64, core::primitive::i64];
+            // [crate::num::usize, core::primitive::usize, crate::num::isize, core::primitive::isize];
+        wider than usize:
+            [crate::num::u128, core::primitive::u128, crate::num::i128, core::primitive::i128];
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::traits::iterator::{Iterator, IteratorMethods};
