@@ -42,7 +42,8 @@ ALLOC_CHARON_EXCLUDES = \
     --exclude '{impl core::ops::index::Index<_> for alloc_models::vec::Vec<_, _>}::*'
 
 .PHONY: all llbc extract patch lean build clean clean-generated tests \
-        tests-clean alloc-stage alloc-llbc alloc-extract alloc-clean
+        tests-clean alloc-stage alloc-llbc alloc-extract alloc-clean docs \
+        docs-clean
 
 all: lean
 
@@ -132,6 +133,14 @@ build:
 
 # Convenience target: extract, patch, build.
 lean: extract patch build
+
+# Generate HTML API docs for the Lean library via doc-gen4. Output goes to
+# $(LEAN_DIR)/.lake/build/doc/ (open index.html in a browser).
+docs:
+	cd $(LEAN_DIR) && lake build CoreModels:docs
+
+docs-clean:
+	rm -rf $(LEAN_DIR)/.lake/build/doc
 
 # Remove only generated artifacts; preserve hand-written files.
 clean-generated:
