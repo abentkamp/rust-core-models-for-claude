@@ -1,4 +1,4 @@
-import CoreModels.Funs
+import CoreModels.Core.Funs
 
 namespace Aeneas.Std
 open Std.Do WP Std.Do Result
@@ -50,7 +50,6 @@ theorem loop_spec
       exact Lean.Order.admissible_flatOrder _ hdiv
     · intro g IH y hinvy
       have hb : (wp⟦body y⟧ _).down := h_body y hinvy trivial
-      simp only [Result.instWP] at hb ⊢
       cases hbe : body y with
       | ok cf =>
         rw [hbe] at hb
@@ -65,7 +64,6 @@ theorem loop_spec
     rename_i g IH
     have hb : (wp⟦body x⟧ _).down := h_body x hinv trivial
     rw [loop.eq_1]
-    simp only [Result.instWP] at hb ⊢
     cases hbe : body x with
     | ok cf =>
       rw [hbe] at hb
@@ -78,5 +76,32 @@ theorem loop_spec
       | done r => exact hb
     | fail e => rw [hbe] at hb; exact hb
     | div => rw [hbe] at hb; exact hb
+
+open ScalarElab
+
+iscalar_no_isize @[spec] theorem  «%S».hShiftRight_I8_spec (a : «%S») (b : I8) (hmin : b.val ≥ 0) (hmax : b.val < %Size) :
+    ⦃ ⌜ True ⌝ ⦄ (a >>> b) ⦃ ⇓ r => ⌜ r.val = a.val / (2 ^ b.val.toNat) ⌝ ⦄ := by
+  mvcgen [HShiftRight.hShiftRight, IScalar.shiftRight_IScalar, IScalar.shiftRight]
+    <;> grind [IScalar.val, Int.shiftRight_eq_div_pow]
+
+iscalar_no_isize @[spec] theorem  «%S».hShiftRight_I16_spec (a : «%S») (b : I16) (hmin : b.val ≥ 0) (hmax : b.val < %Size) :
+    ⦃ ⌜ True ⌝ ⦄ (a >>> b) ⦃ ⇓ r => ⌜ r.val = a.val / (2 ^ b.val.toNat) ⌝ ⦄ := by
+  mvcgen [HShiftRight.hShiftRight, IScalar.shiftRight_IScalar, IScalar.shiftRight]
+    <;> grind [IScalar.val, Int.shiftRight_eq_div_pow]
+
+iscalar_no_isize @[spec] theorem  «%S».hShiftRight_I32_spec (a : «%S») (b : I32) (hmin : b.val ≥ 0) (hmax : b.val < %Size) :
+    ⦃ ⌜ True ⌝ ⦄ (a >>> b) ⦃ ⇓ r => ⌜ r.val = a.val / (2 ^ b.val.toNat) ⌝ ⦄ := by
+  mvcgen [HShiftRight.hShiftRight, IScalar.shiftRight_IScalar, IScalar.shiftRight]
+    <;> grind [IScalar.val, Int.shiftRight_eq_div_pow]
+
+iscalar_no_isize @[spec] theorem  «%S».hShiftRight_I64_spec (a : «%S») (b : I64) (hmin : b.val ≥ 0) (hmax : b.val < %Size) :
+    ⦃ ⌜ True ⌝ ⦄ (a >>> b) ⦃ ⇓ r => ⌜ r.val = a.val / (2 ^ b.val.toNat) ⌝ ⦄ := by
+  mvcgen [HShiftRight.hShiftRight, IScalar.shiftRight_IScalar, IScalar.shiftRight]
+    <;> grind [IScalar.val, Int.shiftRight_eq_div_pow]
+
+iscalar_no_isize @[spec] theorem  «%S».hShiftRight_I128_spec (a : «%S») (b : I128) (hmin : b.val ≥ 0) (hmax : b.val < %Size) :
+    ⦃ ⌜ True ⌝ ⦄ (a >>> b) ⦃ ⇓ r => ⌜ r.val = a.val / (2 ^ b.val.toNat) ⌝ ⦄ := by
+  mvcgen [HShiftRight.hShiftRight, IScalar.shiftRight_IScalar, IScalar.shiftRight]
+    <;> grind [IScalar.val, Int.shiftRight_eq_div_pow]
 
 end Aeneas.Std
