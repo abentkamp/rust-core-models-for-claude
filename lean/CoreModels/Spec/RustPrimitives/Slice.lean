@@ -9,19 +9,19 @@ open Std.Do WP Result
 
 set_option mvcgen.warning false
 
-/-! ## Generic pure-closure reasoning for `array_from_fn`.
+/-! ## Generic pure-closure reasoning for `rust_primitives::slice::array_from_fn`.
 
-`rust_primitives.slice.array_from_fn` folds a `FnMut` closure across
-`0 .. N`. When that closure is *pure* — `call_mut c i = .ok (f i, c)` for
-some `f : Nat → T`, leaving the state `c` untouched — the whole fold
-collapses to `.ok (List.range N |>.map f)`. Both `core.array.from_fn`
-(see `Spec/Array.lean`) and the slice→array `try_from` (see `Spec/Slice.lean`)
-are instances of this pattern, so the fold induction lives here once. -/
+`array_from_fn` folds a `FnMut` closure across `0 .. N`. When that closure is
+*pure* — `call_mut c i = .ok (f i, c)` for some `f : Nat → T`, leaving the
+state `c` untouched — the whole fold collapses to `.ok (List.range N |>.map f)`.
+Both `core.array.from_fn` (see `Spec/Core/Array.lean`) and the slice→array
+`core.convert` `try_from` (see `Spec/Core/Convert.lean`) are instances of this
+pattern, so the fold induction lives here once. -/
 
 /-- The closure-fold accumulator after folding a pure closure over `l` is
     `acc ++ l.map f`. Generic over the closure `inst`/`c` and the pure
     function `f` it realizes. -/
-theorem from_fn_foldlM_pure_aux
+private theorem array_from_fn_foldlM_pure
     {T F : Type}
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
     (l : List Nat) (acc : List T)
@@ -45,8 +45,8 @@ theorem from_fn_foldlM_pure_aux
       rw [hih]
       simp [List.append_assoc]
 
-/-- Lean-level equation for `array_from_fn` over a pure closure: the result
-    is the array whose `i`-th cell is `f i`. -/
+/-- Lean-level equation for `array_from_fn` over a pure closure: the result is
+    the array whose `i`-th cell is `f i`. -/
 theorem array_from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
@@ -59,7 +59,7 @@ theorem array_from_fn_pure_eq
       inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) := by
     intro k hk; exact hpure k (List.mem_range.mp hk)
   have h_fold :=
-    from_fn_foldlM_pure_aux inst c f (List.range N.val) [] hf
+    array_from_fn_foldlM_pure inst c f (List.range N.val) [] hf
   simp only [List.nil_append] at h_fold
   unfold CoreModels.rust_primitives.slice.array_from_fn
   split

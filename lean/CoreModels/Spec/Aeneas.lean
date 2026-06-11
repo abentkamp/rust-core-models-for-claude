@@ -26,7 +26,7 @@ theorem result_eq_of_triple {α : Type} {x : Result α} {v : α}
   | fail e => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
   | div => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
 
-attribute [spec] Function.uncurry lift
+attribute [spec] Function.uncurry lift massert
 
 @[spec]
 theorem loop_spec

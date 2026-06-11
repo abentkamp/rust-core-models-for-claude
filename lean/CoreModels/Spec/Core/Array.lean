@@ -1,6 +1,6 @@
 import CoreModels.Core.Funs
 import CoreModels.Spec.Aeneas
-import CoreModels.Spec.FromFn
+import CoreModels.Spec.RustPrimitives.Slice
 
 namespace CoreModels
 
@@ -11,7 +11,7 @@ set_option mvcgen.warning false
 
 open ScalarElab
 
-uscalar @[spec] theorem «%S».Core_modelsCmpPartialEqArray.eq_spec {N : Std.Usize} {Q}
+uscalar @[spec] theorem «%S».Array.eq_spec {N : Std.Usize} {Q}
   (a : Array «%S» N) (b : Array «%S» N) (h : (Q.1 (a.val == b.val)).down) :
   ⦃ ⌜ True ⌝ ⦄
   core.Array.Insts.CoreCmpPartialEqArray.eq core.«%S».Insts.CoreCmpPartialEq'S a b
@@ -37,7 +37,7 @@ uscalar @[spec] theorem «%S».Core_modelsCmpPartialEqArray.eq_spec {N : Std.Usi
   · convert h; grind [List.take_eq_self_iff, List.Vector.length_val]
 
 @[spec]
-theorem core_models_Array_Insts_index_RangeUsize_spec
+theorem Array.index_range_spec
       {T : Type} {N : Std.Usize} (arr : Std.Array T N)
       (r : core.ops.range.Range Std.Usize)
       (h0 : r.start.val < r.end.val) -- TODO: We should be able to allow "≤" here
@@ -61,7 +61,7 @@ with the `FnMut` instance of its closure. -/
 /-- Lean-level equation for `core.array.from_fn` over pure closures: a thin
     wrapper over the shared `array_from_fn_pure_eq` (`core.array.from_fn` is
     definitionally `rust_primitives.slice.array_from_fn`). -/
-private theorem from_fn_pure_eq
+private theorem Array.from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
     (inst : CoreModels.core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
     (hpure : ∀ k : Nat, k < N.val →
@@ -80,7 +80,7 @@ For any closure whose `call_mut` is pure (doesn't mutate state),
 Triple over each `call_mut` so `hax_mvcgen` can recurse through it via
 per-closure `@[spec]` lemmas. -/
 @[spec]
-theorem from_fn_pure_spec
+theorem Array.from_fn_spec
     {T F : Type} [Inhabited T] (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
     (hpure : ∀ k : Nat, k < N.val →
@@ -93,7 +93,7 @@ theorem from_fn_pure_spec
   have hpure_eq : ∀ k : Nat, k < N.val →
       inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) :=
     fun k hk => result_eq_of_triple (hpure k hk)
-  have heq := from_fn_pure_eq N inst c f hpure_eq
+  have heq := Array.from_fn_pure_eq N inst c f hpure_eq
   rw [heq]
   simp only [Triple, WP.wp]
   apply SPred.pure_intro

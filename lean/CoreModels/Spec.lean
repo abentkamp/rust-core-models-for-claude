@@ -1,5 +1,8 @@
 import CoreModels.Spec.Aeneas
-import CoreModels.Spec.FromFn
-import CoreModels.Spec.Array
-import CoreModels.Spec.Slice
-import CoreModels.Spec.Iterator
+import CoreModels.Spec.RustPrimitives.Arithmetic
+import CoreModels.Spec.RustPrimitives.Slice
+import CoreModels.Spec.Core.Num
+import CoreModels.Spec.Core.Array
+import CoreModels.Spec.Core.Slice
+import CoreModels.Spec.Core.Convert
+import CoreModels.Spec.Core.Iter

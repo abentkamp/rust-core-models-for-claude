@@ -11,7 +11,7 @@ open Std.Do WP Result
 set_option mvcgen.warning false
 
 @[spec]
-theorem IteratorRange_next_CoreIterRangeStep_spec (i e : Usize) {Q}
+theorem Iter.Range_next_spec (i e : Usize) {Q}
       (h_lt : (h : i.val < e.val) →
         ∀ (s : Usize), s.val = i.val + 1 → (Q.1 (some i, { start := s, «end» := e })).down)
       (h_ge : i.val ≥ e.val → (Q.1 (none, { start := i, «end» := e })).down) :
@@ -27,3 +27,5 @@ theorem IteratorRange_next_CoreIterRangeStep_spec (i e : Usize) {Q}
     rust_primitives.arithmetic.overflowing_add_usize]
   mvcgen [uncurry]
     <;> grind [UScalar.overflowing_add, BitVec.uaddOverflow, UScalar.overflowing_add_eq]
+
+end CoreModels
