@@ -21,10 +21,7 @@ branch with value `v`. This is the bridge that lets a pure-closure `[spec]`
 hypothesis (stated as a Triple) be used as a plain Lean equation. -/
 theorem result_eq_of_triple {α : Type} {x : Result α} {v : α}
     (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄) : x = .ok v := by
-  cases x with
-  | ok a => simp only [Triple, WP.wp, PredTrans.apply] at h; grind
-  | fail e => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
-  | div => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 attribute [spec] Function.uncurry lift massert
 
