@@ -6,7 +6,7 @@ namespace CoreModels
 
 open Aeneas
 open Aeneas.Std hiding namespace core alloc
-open Std.Do WP Std.Do Result
+open Std.Do WP Result
 
 set_option mvcgen.warning false
 

@@ -1,12 +1,12 @@
 import CoreModels.Core.Funs
 import CoreModels.Spec.Aeneas
-
+import CoreModels.Spec.FromFn
 
 namespace CoreModels
 
 open Aeneas
 open Aeneas.Std hiding namespace core alloc
-open Std.Do WP Std.Do Result
+open Std.Do WP Result
 set_option mvcgen.warning false
 
 open ScalarElab
@@ -58,31 +58,9 @@ a `FnMut` instance directly (no `Fn` wrapper). Required because
 `sponge.xor_block_into_state` calls `CoreModels.core.array.from_fn` directly
 with the `FnMut` instance of its closure. -/
 
-private theorem from_fn_foldlM_pure_aux
-    {T F : Type}
-    (inst : CoreModels.core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
-    (l : List Nat) (acc : List T)
-    (hpure : ∀ k ∈ l,
-      inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
-    l.foldlM
-      (fun (s : List T × F) (i : Nat) => do
-        let (v, f') ← inst.call_mut s.2 ⟨BitVec.ofNat _ i⟩
-        Result.ok (s.1 ++ [v], f'))
-      (acc, c) = .ok (acc ++ l.map f, c) := by
-  induction l generalizing acc with
-  | nil =>
-      simp only [List.foldlM_nil, List.map_nil, List.append_nil]; rfl
-  | cons h t ih =>
-      have hh : inst.call_mut c ⟨BitVec.ofNat _ h⟩ = .ok (f h, c) :=
-        hpure h List.mem_cons_self
-      have ht : ∀ k ∈ t, inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) :=
-        fun k hk => hpure k (List.mem_cons_of_mem _ hk)
-      have hih := ih (acc ++ [f h]) ht
-      simp only [List.foldlM_cons, hh, bind_tc_ok, List.map_cons]
-      rw [hih]
-      simp [List.append_assoc]
-
-/-- Lean-level equation for `from_fn` over pure closures. -/
+/-- Lean-level equation for `core.array.from_fn` over pure closures: a thin
+    wrapper over the shared `array_from_fn_pure_eq` (`core.array.from_fn` is
+    definitionally `rust_primitives.slice.array_from_fn`). -/
 private theorem from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
     (inst : CoreModels.core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
@@ -91,24 +69,8 @@ private theorem from_fn_pure_eq
     CoreModels.core.array.from_fn N inst c =
       .ok ⟨(List.range N.val).map f,
            by simp [List.length_map, List.length_range]⟩ := by
-  have hf : ∀ k ∈ List.range N.val,
-      inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) := by
-    intro k hk; exact hpure k (List.mem_range.mp hk)
-  have h_fold :=
-    from_fn_foldlM_pure_aux inst c f (List.range N.val) [] hf
-  simp only [List.nil_append] at h_fold
-  unfold CoreModels.core.array.from_fn CoreModels.rust_primitives.slice.array_from_fn
-  split
-  · rename_i e heq
-    rw [h_fold] at heq; exact absurd heq (by simp)
-  · rename_i heq
-    rw [h_fold] at heq; exact absurd heq (by simp)
-  · rename_i result heq
-    rw [h_fold] at heq
-    have hres : result = ((List.range N.val).map f, c) :=
-      (Result.ok.inj heq).symm
-    subst hres
-    rfl
+  unfold CoreModels.core.array.from_fn
+  exact array_from_fn_pure_eq N inst c f hpure
 
 
 /-- **Generic pure-closure `[spec]` for `core_models.array.from_fn`.**
@@ -130,7 +92,7 @@ theorem from_fn_pure_spec
     ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val → a.val[i]! = f i ⌝ ⦄ := by
   have hpure_eq : ∀ k : Nat, k < N.val →
       inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) :=
-    sorry -- fun k hk => result_eq_of_triple (hpure k hk)
+    fun k hk => result_eq_of_triple (hpure k hk)
   have heq := from_fn_pure_eq N inst c f hpure_eq
   rw [heq]
   simp only [Triple, WP.wp]

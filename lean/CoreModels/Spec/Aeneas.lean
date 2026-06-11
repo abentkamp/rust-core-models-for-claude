@@ -1,7 +1,7 @@
 import CoreModels.Core.Funs
 
 namespace Aeneas.Std
-open Std.Do WP Std.Do Result
+open Std.Do WP Result
 
 set_option mvcgen.warning false
 
@@ -12,6 +12,19 @@ theorem Result.ok_spec {α : Type} {a : α} {Q} (hQ : (Q.1 a).down) :
 @[spec]
 theorem Result.fail_spec {α : Type} {e : Error} {Q} (hQ : (Q.2.1 e).down) :
   ⦃ ⌜ True ⌝ ⦄ (Result.fail e : Result α) ⦃ Q ⦄ := by simpa [Triple]
+
+/-- Extract a concrete `= .ok v` equation from a `noThrow` Triple.
+
+Since `⇓ r => …` is `PostCond.noThrow` (its `fail`/`div` branches are
+`False`), a Triple `⦃⌜True⌝⦄ x ⦃⇓ r => ⌜r = v⌝⦄` forces `x` onto the `ok`
+branch with value `v`. This is the bridge that lets a pure-closure `[spec]`
+hypothesis (stated as a Triple) be used as a plain Lean equation. -/
+theorem result_eq_of_triple {α : Type} {x : Result α} {v : α}
+    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄) : x = .ok v := by
+  cases x with
+  | ok a => simp only [Triple, WP.wp, PredTrans.apply] at h; grind
+  | fail e => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
+  | div => simp only [Triple, WP.wp, PredTrans.apply] at h; exact absurd h (by simp)
 
 attribute [spec] Function.uncurry lift
 
