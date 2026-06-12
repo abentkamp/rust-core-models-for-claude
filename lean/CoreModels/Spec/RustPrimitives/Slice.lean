@@ -21,9 +21,11 @@ pattern, so the recursion lives here once. -/
 
 /-- The recursive worker over a pure closure returns `l.map f`, as a Triple.
 
-The induction is expressed as a recursion of the lemma on the tail: the `have
-ih` is a recursive call providing the worker's spec for `t`, which `mvcgen`
-then picks up for the recursive `array_from_fn_go` call in the body. -/
+`induction l generalizing c` yields an induction hypothesis abstract over the
+closure state `c` (and the tail), so `mvcgen` can pick it up directly as the
+spec for the recursive `array_from_fn_go` call in the body — no explicit case
+match, and no need to fix the state. `simp_all` (unfolding `Triple`) discharges
+the head-element step and the IH's purity premise from `hpure`. -/
 private theorem array_from_fn_go_pure
     {T F : Type}
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T) (l : List Nat)
@@ -32,23 +34,14 @@ private theorem array_from_fn_go_pure
     ⦃ ⌜ True ⌝ ⦄
     rust_primitives.slice.array_from_fn_go inst c l
     ⦃ ⇓ r => ⌜ r = l.map f ⌝ ⦄ := by
-  match l with
-  | [] =>
+  induction l generalizing c with
+  | nil =>
     unfold rust_primitives.slice.array_from_fn_go
     mvcgen
-  | h :: t =>
-    -- IH stated parametrically over the (preserved) closure state, so `mvcgen`
-    -- can unify it against the recursive call `array_from_fn_go inst p.2 t`
-    -- (where `p.2 = c`), emitting the `c' = c` side condition for `grind`.
-    have ih : ∀ c' : F, c' = c →
-        ⦃ ⌜ True ⌝ ⦄
-        rust_primitives.slice.array_from_fn_go inst c' t
-        ⦃ ⇓ r => ⌜ r = t.map f ⌝ ⦄ := by
-      intro c' hc'; subst c'
-      exact array_from_fn_go_pure inst c f t (fun k hk => hpure k (List.mem_cons_of_mem _ hk))
+  | cons h t ih =>
     have hh := hpure h List.mem_cons_self
     unfold rust_primitives.slice.array_from_fn_go
-    mvcgen [hh, ih] <;> simp_all [List.map_cons]
+    mvcgen [hh, ih] <;> simp_all [List.map_cons, Triple, WP.wp, PredTrans.apply]
 
 /-- Lean-level equation for `array_from_fn` over a pure closure: the result is
     the array whose `i`-th cell is `f i`. -/
