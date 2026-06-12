@@ -87,6 +87,8 @@ def rust_primitives.slice.array_from_fn
   core.ops.function.FnMut F Std.Usize T) :
   F → Result (Array T N) := fun f => do
   let result ← array_from_fn_go coreopsfunctionFnMutFTupleUsizeTInst f (List.range N.val)
+  -- The `else` is unreachable: `array_from_fn_go` always returns one element per
+  -- index, so `result.length = (List.range N.val).length = N.val`.
   (if h : result.length = N.val then ok ⟨result, h⟩ else fail .panic)
 
 /-- [rust_primitives::slice::array_map]:
