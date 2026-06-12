@@ -77,36 +77,6 @@ def rust_primitives.slice.array_from_fn_go {T F : Type}
     let r ← array_from_fn_go inst p.2 is
     ok (p.1 :: r)
 
-/-- A successful `array_from_fn_go` returns one element per index. -/
-theorem rust_primitives.slice.array_from_fn_go_length {T F : Type}
-    (inst : core.ops.function.FnMut F Std.Usize T) :
-    ∀ (c : F) (l : List Nat) (r : List T),
-    array_from_fn_go inst c l = .ok r → r.length = l.length := by
-  intro c l
-  induction l generalizing c with
-  | nil =>
-    intro r h
-    simp only [array_from_fn_go] at h
-    obtain rfl := Result.ok.inj h.symm
-    rfl
-  | cons i is ih =>
-    intro r h
-    simp only [array_from_fn_go] at h
-    cases hcall : inst.call_mut c ⟨BitVec.ofNat _ i⟩ with
-    | ok p =>
-      rw [hcall] at h
-      simp only [bind_tc_ok] at h
-      cases hrec : array_from_fn_go inst p.2 is with
-      | ok r' =>
-        rw [hrec] at h
-        simp only [bind_tc_ok] at h
-        obtain rfl := Result.ok.inj h.symm
-        simp only [List.length_cons, ih p.2 r' hrec]
-      | fail e => rw [hrec] at h; simp at h
-      | div => rw [hrec] at h; simp at h
-    | fail e => rw [hcall] at h; simp at h
-    | div => rw [hcall] at h; simp at h
-
 /-- [rust_primitives::slice::array_from_fn]:
     Source: 'rust_primitives/src/lib.rs', lines 28:4-28:81
     Name pattern: [rust_primitives::slice::array_from_fn]
@@ -115,14 +85,9 @@ theorem rust_primitives.slice.array_from_fn_go_length {T F : Type}
 def rust_primitives.slice.array_from_fn
   {T : Type} {F : Type} (N : Std.Usize) (coreopsfunctionFnMutFTupleUsizeTInst :
   core.ops.function.FnMut F Std.Usize T) :
-  F → Result (Array T N) := fun f =>
-  match h : array_from_fn_go coreopsfunctionFnMutFTupleUsizeTInst f (List.range N.val) with
-  | fail e => fail e
-  | div => div
-  | ok result => ok ⟨result, by
-      have hlen := array_from_fn_go_length coreopsfunctionFnMutFTupleUsizeTInst
-        f (List.range N.val) result h
-      simpa [List.length_range] using hlen⟩
+  F → Result (Array T N) := fun f => do
+  let result ← array_from_fn_go coreopsfunctionFnMutFTupleUsizeTInst f (List.range N.val)
+  (if h : result.length = N.val then ok ⟨result, h⟩ else fail .panic)
 
 /-- [rust_primitives::slice::array_map]:
     Source: 'rust_primitives/src/lib.rs', lines 31:4-31:84

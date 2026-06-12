@@ -44,7 +44,9 @@ private theorem array_from_fn_go_pure
     mvcgen [hh, ih] <;> simp_all [List.map_cons, Triple, WP.wp, PredTrans.apply]
 
 /-- Lean-level equation for `array_from_fn` over a pure closure: the result is
-    the array whose `i`-th cell is `f i`. -/
+    the array whose `i`-th cell is `f i`. Proved by `mvcgen` stepping through
+    the `do` block, using `array_from_fn_go_pure` as the spec for the worker
+    and `result_eq_of_triple` to recover the `= .ok …` equation. -/
 theorem array_from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
@@ -53,21 +55,10 @@ theorem array_from_fn_pure_eq
     rust_primitives.slice.array_from_fn N inst c =
       .ok ⟨(List.range N.val).map f,
            by simp [List.length_map, List.length_range]⟩ := by
-  have hgo : rust_primitives.slice.array_from_fn_go inst c (List.range N.val)
-      = .ok ((List.range N.val).map f) :=
-    result_eq_of_triple <|
-      array_from_fn_go_pure inst c f (List.range N.val)
-        (fun k hk => triple_of_result_eq (hpure k (List.mem_range.mp hk)))
-  unfold CoreModels.rust_primitives.slice.array_from_fn
-  split
-  · rename_i e heq
-    rw [hgo] at heq; exact absurd heq (by simp)
-  · rename_i heq
-    rw [hgo] at heq; exact absurd heq (by simp)
-  · rename_i result heq
-    rw [hgo] at heq
-    have hres : result = (List.range N.val).map f := (Result.ok.inj heq).symm
-    subst hres
-    rfl
+  apply result_eq_of_triple
+  have hgo := array_from_fn_go_pure inst c f (List.range N.val)
+    (fun k hk => triple_of_result_eq (hpure k (List.mem_range.mp hk)))
+  unfold rust_primitives.slice.array_from_fn
+  mvcgen [hgo] <;> simp_all [List.length_map, List.length_range]
 
 end CoreModels
