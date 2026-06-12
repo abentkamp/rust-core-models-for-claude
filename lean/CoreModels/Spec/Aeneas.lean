@@ -23,6 +23,13 @@ theorem result_eq_of_triple {α : Type} {x : Result α} {v : α}
     (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄) : x = .ok v := by
   cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
+/-- Converse of `result_eq_of_triple`: a `= .ok v` equation gives a `noThrow`
+Triple. Lets a pure-equation hypothesis be fed to an `mvcgen`/Triple-based
+spec. -/
+theorem triple_of_result_eq {α : Type} {x : Result α} {v : α}
+    (h : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ := by
+  subst h; exact Result.ok_spec (by simp)
+
 attribute [spec] Function.uncurry lift massert
 
 @[spec]

@@ -19,24 +19,36 @@ untouched — the result is just `.ok (List.range N |>.map f)`. Both
 `core.convert` `try_from` (see `Spec/Core/Convert.lean`) are instances of this
 pattern, so the recursion lives here once. -/
 
-/-- The recursive worker over a pure closure returns `l.map f`. -/
+/-- The recursive worker over a pure closure returns `l.map f`, as a Triple.
+
+The induction is expressed as a recursion of the lemma on the tail: the `have
+ih` is a recursive call providing the worker's spec for `t`, which `mvcgen`
+then picks up for the recursive `array_from_fn_go` call in the body. -/
 private theorem array_from_fn_go_pure
     {T F : Type}
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T) (l : List Nat)
-    (hpure : ∀ k ∈ l, inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
-    rust_primitives.slice.array_from_fn_go inst c l = .ok (l.map f) := by
-  induction l with
-  | nil => rfl
-  | cons h t ih =>
-    -- Restate the goal in this lemma's elaboration context so the `Usize`
-    -- index width lines up syntactically with `hpure` (the worker's `_`
-    -- elaborates to a defeq-but-distinct width).
-    show (do
-      let p ← inst.call_mut c ⟨BitVec.ofNat _ h⟩
-      let r ← rust_primitives.slice.array_from_fn_go inst p.2 t
-      ok (p.1 :: r)) = .ok ((h :: t).map f)
-    rw [hpure h List.mem_cons_self]
-    simp [bind_tc_ok, ih (fun k hk => hpure k (List.mem_cons_of_mem _ hk)), List.map_cons]
+    (hpure : ∀ k ∈ l,
+      ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r = (f k, c) ⌝ ⦄) :
+    ⦃ ⌜ True ⌝ ⦄
+    rust_primitives.slice.array_from_fn_go inst c l
+    ⦃ ⇓ r => ⌜ r = l.map f ⌝ ⦄ := by
+  match l with
+  | [] =>
+    unfold rust_primitives.slice.array_from_fn_go
+    mvcgen
+  | h :: t =>
+    -- IH stated parametrically over the (preserved) closure state, so `mvcgen`
+    -- can unify it against the recursive call `array_from_fn_go inst p.2 t`
+    -- (where `p.2 = c`), emitting the `c' = c` side condition for `grind`.
+    have ih : ∀ c' : F, c' = c →
+        ⦃ ⌜ True ⌝ ⦄
+        rust_primitives.slice.array_from_fn_go inst c' t
+        ⦃ ⇓ r => ⌜ r = t.map f ⌝ ⦄ := by
+      intro c' hc'; subst c'
+      exact array_from_fn_go_pure inst c f t (fun k hk => hpure k (List.mem_cons_of_mem _ hk))
+    have hh := hpure h List.mem_cons_self
+    unfold rust_primitives.slice.array_from_fn_go
+    mvcgen [hh, ih] <;> simp_all [List.map_cons]
 
 /-- Lean-level equation for `array_from_fn` over a pure closure: the result is
     the array whose `i`-th cell is `f i`. -/
@@ -48,8 +60,11 @@ theorem array_from_fn_pure_eq
     rust_primitives.slice.array_from_fn N inst c =
       .ok ⟨(List.range N.val).map f,
            by simp [List.length_map, List.length_range]⟩ := by
-  have hgo := array_from_fn_go_pure inst c f (List.range N.val)
-    (fun k hk => hpure k (List.mem_range.mp hk))
+  have hgo : rust_primitives.slice.array_from_fn_go inst c (List.range N.val)
+      = .ok ((List.range N.val).map f) :=
+    result_eq_of_triple <|
+      array_from_fn_go_pure inst c f (List.range N.val)
+        (fun k hk => triple_of_result_eq (hpure k (List.mem_range.mp hk)))
   unfold CoreModels.rust_primitives.slice.array_from_fn
   split
   · rename_i e heq
