@@ -61,17 +61,4 @@ theorem array_from_fn_spec
   unfold rust_primitives.slice.array_from_fn
   mvcgen [hgo] <;> simp_all [List.length_map, List.length_range]
 
-/-- Lean-level equation for `array_from_fn` over a pure closure, recovered from
-    the Triple spec `array_from_fn_spec` via `result_eq_of_triple`. -/
-theorem array_from_fn_pure_eq
-    {T F : Type} (N : Std.Usize)
-    (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
-    (hpure : ∀ k : Nat, k < N.val →
-      inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
-    rust_primitives.slice.array_from_fn N inst c =
-      .ok ⟨(List.range N.val).map f,
-           by simp [List.length_map, List.length_range]⟩ :=
-  result_eq_of_triple
-    (array_from_fn_spec N inst c f (fun k hk => triple_of_result_eq (hpure k hk)))
-
 end CoreModels

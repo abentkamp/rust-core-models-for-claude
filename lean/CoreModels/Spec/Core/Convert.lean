@@ -18,7 +18,7 @@ parts:
 
 1. Closure step: `call_mut s i = .ok (s.val[i.val]!, s)` for `i.val <
    s.length` — the closure reads the slice and preserves its state.
-2. Assembly via the shared `array_from_fn_pure_eq` (see
+2. Assembly via the shared `array_from_fn_spec` (see
    `Spec/RustPrimitives/Slice.lean`): the closure is pure with `f k = s.val[k]!`,
    so `array_from_fn N closure s = .ok (Array.make N s.val)` when
    `s.length = N.val` (the image of `0 .. N` under `f` is `s.val`).
@@ -52,7 +52,7 @@ private theorem Convert.try_from_slice_closure_eq
     when `s.length = N.val`.
 
     The `try_from` closure is pure — it reads `s` and preserves it — so this
-    is the shared `array_from_fn_pure_eq` instantiated at `f := fun k => s.val[k]!`,
+    is the shared `array_from_fn_spec` instantiated at `f := fun k => s.val[k]!`,
     whose image over `0 .. N` is exactly `s.val`. -/
 theorem Convert.try_from_slice_array_from_fn_eq
     {T : Type} [Inhabited T] {N : Std.Usize} (cpy : CoreModels.core.marker.Copy T)
@@ -73,9 +73,11 @@ theorem Convert.try_from_slice_array_from_fn_eq
     have hcall := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
                     ⟨BitVec.ofNat _ k⟩ (by rw [hval]; exact hk_len)
     rw [hval] at hcall; exact hcall
-  have heq := array_from_fn_pure_eq (T := T) N
-                (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
-                  (T := T) (N := N) cpy) s (fun k => s.val[k]!) hpure
+  have heq := result_eq_of_triple
+    (array_from_fn_spec (T := T) N
+      (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
+        (T := T) (N := N) cpy) s (fun k => s.val[k]!)
+      (fun k hk => triple_of_result_eq (hpure k hk)))
   rw [heq]
   -- The image of `0 .. N` under `k ↦ s.val[k]!` is `s.val` itself.
   have hmap : (List.range N.val).map (fun k => s.val[k]!) = s.val := by

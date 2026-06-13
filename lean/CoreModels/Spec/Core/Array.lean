@@ -58,8 +58,8 @@ a `FnMut` instance directly (no `Fn` wrapper). Required because
 `sponge.xor_block_into_state` calls `CoreModels.core.array.from_fn` directly
 with the `FnMut` instance of its closure. -/
 
-/-- Lean-level equation for `core.array.from_fn` over pure closures: a thin
-    wrapper over the shared `array_from_fn_pure_eq` (`core.array.from_fn` is
+/-- Lean-level equation for `core.array.from_fn` over pure closures: recovered
+    from `array_from_fn_spec` via `result_eq_of_triple` (`core.array.from_fn` is
     definitionally `rust_primitives.slice.array_from_fn`). -/
 private theorem Array.from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
@@ -70,7 +70,8 @@ private theorem Array.from_fn_pure_eq
       .ok ⟨(List.range N.val).map f,
            by simp [List.length_map, List.length_range]⟩ := by
   unfold CoreModels.core.array.from_fn
-  exact array_from_fn_pure_eq N inst c f hpure
+  exact result_eq_of_triple
+    (array_from_fn_spec N inst c f (fun k hk => triple_of_result_eq (hpure k hk)))
 
 
 /-- **Generic pure-closure `[spec]` for `core_models.array.from_fn`.**
