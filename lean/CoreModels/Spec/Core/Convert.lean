@@ -99,18 +99,16 @@ theorem Convert.try_from_slice_spec
       N cpy s
     ⦃ ⇓ r => ⌜ r = CoreModels.core.result.Result.Ok
                     (Std.Array.make N s.val (by simp [hlen])) ⌝ ⦄ := by
-  -- Unfold try_from and reduce the `do` chain step-by-step.
-  unfold CoreModels.core.Array.Insts.CoreConvertTryFromShared0SliceTryFromSliceError.try_from
-  -- `CoreModels.core.slice.Slice.len x` is `pure (Slice.len x)`, returns `.ok (Slice.len s)`.
-  unfold CoreModels.core.slice.Slice.len
-  -- The if-decision: `Slice.len s = N` reduces to `s.val.length = N.val`.
+  -- `Slice.len s = N` reduces to `s.val.length = N.val`.
   have hi_eq : (Std.Slice.len s) = N := by
     apply Std.UScalar.eq_of_val_eq
     simp [hlen]
-  -- Reduce the array_from_fn call to .ok.
-  have h_afn := Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen
-  simp only [Triple, WP.wp, Pure.pure, bind_tc_ok, hi_eq, if_true, h_afn]
-  intro _
-  trivial
+  -- The `array_from_fn` call, as a Triple spec for `mvcgen` to step through.
+  have h_afn := triple_of_result_eq
+    (Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen)
+  unfold CoreModels.core.Array.Insts.CoreConvertTryFromShared0SliceTryFromSliceError.try_from
+    CoreModels.core.slice.Slice.len
+  mvcgen [h_afn]
+  simp_all
 
 end CoreModels

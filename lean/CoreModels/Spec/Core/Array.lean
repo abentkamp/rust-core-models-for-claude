@@ -75,12 +75,11 @@ theorem Array.from_fn_spec
     ⦃ ⌜ True ⌝ ⦄
     core.array.from_fn N inst c
     ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val → a.val[i]! = f i ⌝ ⦄ := by
+  have hspec := array_from_fn_spec N inst c f hpure
   unfold CoreModels.core.array.from_fn
-  mvcgen
-  case vc2.hpure => simp_all [Triple, WP.wp, PredTrans.apply]
-  case vc3.success =>
-    rintro rfl i hi
-    rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
-    rfl
+  mvcgen [hspec]
+  rintro rfl i hi
+  rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
+  rfl
 
 end CoreModels

@@ -45,8 +45,11 @@ private theorem array_from_fn_go_pure
 
 /-- **Triple spec for `array_from_fn` over a pure closure.** Proved by `mvcgen`
     stepping through the `do` block, with `array_from_fn_go_pure` supplying the
-    worker spec: the result array's underlying list is `(List.range N).map f`. -/
-@[spec]
+    worker spec: the result array's underlying list is `(List.range N).map f`.
+
+    Not `@[spec]`: callers pass it explicitly (pre-applied), because the closure
+    function `f` is generally not determined by the goal, so leaving it as an
+    `mvcgen` metavariable does not unify. -/
 theorem array_from_fn_spec
     {T F : Type} (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
