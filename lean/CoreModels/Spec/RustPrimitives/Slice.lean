@@ -43,25 +43,59 @@ private theorem array_from_fn_go_pure
     unfold rust_primitives.slice.array_from_fn_go
     mvcgen [hh, ih] <;> simp_all [List.map_cons, Triple, WP.wp, PredTrans.apply]
 
-/-- **Triple spec for `array_from_fn` over a pure closure.** Proved by `mvcgen`
-    stepping through the `do` block, with `array_from_fn_go_pure` supplying the
-    worker spec: the result array's underlying list is `(List.range N).map f`.
-
-    Not `@[spec]`: callers pass it explicitly (pre-applied), because the closure
-    function `f` is generally not determined by the goal, so leaving it as an
-    `mvcgen` metavariable does not unify. -/
-theorem array_from_fn_spec
+/-- The result array's underlying list is `(List.range N).map f`, for the
+    pure closure realizing `f`. The `f`-indexed form, for callers that need the
+    exact resulting array (e.g. `core.convert`'s slice→array `try_from`). -/
+theorem array_from_fn_eq
     {T F : Type} (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
-    (hpure : ∀ k : Nat, k < N.val →
-      ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r = (f k, c) ⌝ ⦄) :
+    (hf : ∀ k : Nat, k < N.val → inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
     ⦃ ⌜ True ⌝ ⦄
     rust_primitives.slice.array_from_fn N inst c
     ⦃ ⇓ a => ⌜ a = ⟨(List.range N.val).map f,
                    by simp [List.length_map, List.length_range]⟩ ⌝ ⦄ := by
   have hgo := array_from_fn_go_pure inst c f (List.range N.val)
-    (fun k hk => hpure k (List.mem_range.mp hk))
+    (fun k hk => triple_of_result_eq (hf k (List.mem_range.mp hk)))
   unfold rust_primitives.slice.array_from_fn
   mvcgen [hgo] <;> simp_all [List.length_map, List.length_range]
+
+/-- **Triple spec for `array_from_fn` over a pure closure.**
+
+`f`-free, so it can be `@[spec]` (nothing for `mvcgen` to leave as a
+metavariable): assuming each `call_mut` preserves the state (`hpure`), the
+result array's `i`-th cell is exactly the value `call_mut c i` produces —
+stated as a Triple in the postcondition. A caller who knows what `call_mut`
+returns recovers the cell via `triple_ok_elim`. -/
+@[spec]
+theorem array_from_fn_spec
+    {T F : Type} [Inhabited T] (N : Std.Usize)
+    (inst : core.ops.function.FnMut F Std.Usize T) (c : F)
+    (hpure : ∀ k : Nat, k < N.val →
+      ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r.2 = c ⌝ ⦄) :
+    ⦃ ⌜ True ⌝ ⦄
+    rust_primitives.slice.array_from_fn N inst c
+    ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val →
+                ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ i⟩
+                          ⦃ ⇓ r => ⌜ r.1 = a.val[i]! ⌝ ⦄ ⌝ ⦄ := by
+  -- Extract the value function `f` the closure realizes.
+  have hex : ∀ k, k < N.val → ∃ v : T, inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (v, c) := by
+    intro k hk
+    obtain ⟨⟨v, st⟩, hok, hst⟩ := exists_ok_of_triple (hpure k hk)
+    have : st = c := hst
+    exact ⟨v, this ▸ hok⟩
+  classical
+  let f : Nat → T := fun k => if h : k < N.val then (hex k h).choose else default
+  have hf : ∀ k : Nat, k < N.val → inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) := by
+    intro k hk
+    show inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok ((dite _ (fun h => (hex k h).choose) _), c)
+    rw [dif_pos hk]
+    exact (hex k hk).choose_spec
+  have hspec := array_from_fn_eq N inst c f hf
+  mvcgen [hspec]
+  rintro rfl i hi
+  apply triple_ok_intro (hf i hi)
+  show f i = ((List.range N.val).map f)[i]!
+  rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
+  rfl
 
 end CoreModels

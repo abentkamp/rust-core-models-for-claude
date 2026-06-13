@@ -30,6 +30,26 @@ theorem triple_of_result_eq {α : Type} {x : Result α} {v : α}
     (h : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ := by
   subst h; exact Result.ok_spec (by simp)
 
+/-- Read a `noThrow` postcondition off at a concrete `ok` value: a Triple
+`⦃⌜True⌝⦄ x ⦃⇓ r => ⌜P r⌝⦄` together with `x = .ok v` yields `P v`. -/
+theorem triple_ok_elim {α : Type} {x : Result α} {v : α} {P : α → Prop}
+    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) (hx : x = .ok v) : P v := by
+  subst hx; simpa [Triple, WP.wp, PredTrans.apply] using h
+
+/-- Build a `noThrow` Triple from a concrete `ok` result and a fact about it. -/
+theorem triple_ok_intro {α : Type} {x : Result α} {v : α} {P : α → Prop}
+    (hx : x = .ok v) (hv : P v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ := by
+  subst hx; exact Result.ok_spec hv
+
+/-- A `noThrow` Triple forces `x` onto the `ok` branch, exposing both the value
+and the postcondition. -/
+theorem exists_ok_of_triple {α : Type} {x : Result α} {P : α → Prop}
+    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) : ∃ a, x = .ok a ∧ P a := by
+  cases hx : x with
+  | ok a => exact ⟨a, rfl, triple_ok_elim h hx⟩
+  | fail e => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
+  | div => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
+
 attribute [spec] Function.uncurry lift massert
 
 @[spec]

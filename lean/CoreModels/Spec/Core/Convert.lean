@@ -74,10 +74,9 @@ theorem Convert.try_from_slice_array_from_fn_eq
                     ⟨BitVec.ofNat _ k⟩ (by rw [hval]; exact hk_len)
     rw [hval] at hcall; exact hcall
   have heq := result_eq_of_triple
-    (array_from_fn_spec (T := T) N
+    (array_from_fn_eq (T := T) N
       (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
-        (T := T) (N := N) cpy) s (fun k => s.val[k]!)
-      (fun k hk => triple_of_result_eq (hpure k hk)))
+        (T := T) (N := N) cpy) s (fun k => s.val[k]!) hpure)
   rw [heq]
   -- The image of `0 .. N` under `k ↦ s.val[k]!` is `s.val` itself.
   have hmap : (List.range N.val).map (fun k => s.val[k]!) = s.val := by
@@ -103,12 +102,15 @@ theorem Convert.try_from_slice_spec
   have hi_eq : (Std.Slice.len s) = N := by
     apply Std.UScalar.eq_of_val_eq
     simp [hlen]
-  -- The `array_from_fn` call, as a Triple spec for `mvcgen` to step through.
-  have h_afn := triple_of_result_eq
-    (Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen)
+  -- `try_from` needs the *exact* resulting array, so reduce via the
+  -- `f`-indexed `array_from_fn_eq` (through `try_from_slice_array_from_fn_eq`)
+  -- rather than the f-free `@[spec]` (whose pointwise postcondition `mvcgen`
+  -- would otherwise auto-apply here).
+  have h_afn := Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen
   unfold CoreModels.core.Array.Insts.CoreConvertTryFromShared0SliceTryFromSliceError.try_from
     CoreModels.core.slice.Slice.len
-  mvcgen [h_afn]
-  simp_all
+  simp only [Triple, WP.wp, Pure.pure, bind_tc_ok, hi_eq, if_true, h_afn]
+  intro _
+  trivial
 
 end CoreModels
