@@ -58,22 +58,6 @@ a `FnMut` instance directly (no `Fn` wrapper). Required because
 `sponge.xor_block_into_state` calls `CoreModels.core.array.from_fn` directly
 with the `FnMut` instance of its closure. -/
 
-/-- Lean-level equation for `core.array.from_fn` over pure closures: recovered
-    from `array_from_fn_spec` via `result_eq_of_triple` (`core.array.from_fn` is
-    definitionally `rust_primitives.slice.array_from_fn`). -/
-private theorem Array.from_fn_pure_eq
-    {T F : Type} (N : Std.Usize)
-    (inst : CoreModels.core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
-    (hpure : ∀ k : Nat, k < N.val →
-      inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
-    CoreModels.core.array.from_fn N inst c =
-      .ok ⟨(List.range N.val).map f,
-           by simp [List.length_map, List.length_range]⟩ := by
-  unfold CoreModels.core.array.from_fn
-  exact result_eq_of_triple
-    (array_from_fn_spec N inst c f (fun k hk => triple_of_result_eq (hpure k hk)))
-
-
 /-- **Generic pure-closure `[spec]` for `core_models.array.from_fn`.**
 
 For any closure whose `call_mut` is pure (doesn't mutate state),
@@ -91,17 +75,12 @@ theorem Array.from_fn_spec
     ⦃ ⌜ True ⌝ ⦄
     core.array.from_fn N inst c
     ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val → a.val[i]! = f i ⌝ ⦄ := by
-  have hpure_eq : ∀ k : Nat, k < N.val →
-      inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c) :=
-    fun k hk => result_eq_of_triple (hpure k hk)
-  have heq := Array.from_fn_pure_eq N inst c f hpure_eq
-  rw [heq]
-  simp only [Triple, WP.wp]
-  apply SPred.pure_intro
-  intro i hi
-  show ((List.range N.val).map f)[i]! = f i
-  rw [List.getElem!_eq_getElem?_getD, List.getElem?_map,
-      List.getElem?_range hi]
-  rfl
+  unfold CoreModels.core.array.from_fn
+  mvcgen
+  case vc2.hpure => simp_all [Triple, WP.wp, PredTrans.apply]
+  case vc3.success =>
+    rintro rfl i hi
+    rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
+    rfl
 
 end CoreModels
