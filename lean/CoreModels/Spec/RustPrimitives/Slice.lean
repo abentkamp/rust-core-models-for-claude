@@ -43,10 +43,26 @@ private theorem array_from_fn_go_pure
     unfold rust_primitives.slice.array_from_fn_go
     mvcgen [hh, ih] <;> simp_all [List.map_cons, Triple, WP.wp, PredTrans.apply]
 
-/-- Lean-level equation for `array_from_fn` over a pure closure: the result is
-    the array whose `i`-th cell is `f i`. Proved by `mvcgen` stepping through
-    the `do` block, using `array_from_fn_go_pure` as the spec for the worker
-    and `result_eq_of_triple` to recover the `= .ok …` equation. -/
+/-- **Triple spec for `array_from_fn` over a pure closure.** Proved by `mvcgen`
+    stepping through the `do` block, with `array_from_fn_go_pure` supplying the
+    worker spec: the result array's underlying list is `(List.range N).map f`. -/
+@[spec]
+theorem array_from_fn_spec
+    {T F : Type} (N : Std.Usize)
+    (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
+    (hpure : ∀ k : Nat, k < N.val →
+      ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r = (f k, c) ⌝ ⦄) :
+    ⦃ ⌜ True ⌝ ⦄
+    rust_primitives.slice.array_from_fn N inst c
+    ⦃ ⇓ a => ⌜ a = ⟨(List.range N.val).map f,
+                   by simp [List.length_map, List.length_range]⟩ ⌝ ⦄ := by
+  have hgo := array_from_fn_go_pure inst c f (List.range N.val)
+    (fun k hk => hpure k (List.mem_range.mp hk))
+  unfold rust_primitives.slice.array_from_fn
+  mvcgen [hgo] <;> simp_all [List.length_map, List.length_range]
+
+/-- Lean-level equation for `array_from_fn` over a pure closure, recovered from
+    the Triple spec `array_from_fn_spec` via `result_eq_of_triple`. -/
 theorem array_from_fn_pure_eq
     {T F : Type} (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (f : Nat → T)
@@ -54,11 +70,8 @@ theorem array_from_fn_pure_eq
       inst.call_mut c ⟨BitVec.ofNat _ k⟩ = .ok (f k, c)) :
     rust_primitives.slice.array_from_fn N inst c =
       .ok ⟨(List.range N.val).map f,
-           by simp [List.length_map, List.length_range]⟩ := by
-  apply result_eq_of_triple
-  have hgo := array_from_fn_go_pure inst c f (List.range N.val)
-    (fun k hk => triple_of_result_eq (hpure k (List.mem_range.mp hk)))
-  unfold rust_primitives.slice.array_from_fn
-  mvcgen [hgo] <;> simp_all [List.length_map, List.length_range]
+           by simp [List.length_map, List.length_range]⟩ :=
+  result_eq_of_triple
+    (array_from_fn_spec N inst c f (fun k hk => triple_of_result_eq (hpure k hk)))
 
 end CoreModels
