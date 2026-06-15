@@ -8,12 +8,6 @@ open Std.Do WP Result
 
 set_option mvcgen.warning false
 
-/-! ## `rust_primitives::arithmetic` little-endian byte conversions.
-
-These are the primitive implementations behind `core::num`'s
-`from_le_bytes`/`to_le_bytes` (see `Spec/Core/Num.lean`); registering them as
-`[spec]` lets `mvcgen` step through the `core::num` wrappers. -/
-
 attribute [spec]
   rust_primitives.arithmetic.from_le_bytes_u8
   rust_primitives.arithmetic.from_le_bytes_u16
