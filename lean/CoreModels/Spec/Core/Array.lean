@@ -74,7 +74,8 @@ theorem Array.from_fn_spec
       ⦃ ⇓ r => ⌜ r = (f k, c) ⌝ ⦄) :
     ⦃ ⌜ True ⌝ ⦄
     core.array.from_fn N inst c
-    ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val → a.val[i]! = f i ⌝ ⦄ := by
+    ⦃ ⇓ a => ⌜ ∀ i : Nat, (hi : i < N.val) →
+                a.val[i]'(by have := a.property; omega) = f i ⌝ ⦄ := by
   unfold CoreModels.core.array.from_fn
   mvcgen
   case vc1.hpure =>

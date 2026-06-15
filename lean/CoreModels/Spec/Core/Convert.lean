@@ -16,10 +16,10 @@ The body invokes `CoreModels.rust_primitives.slice.array_from_fn` on the `try_fr
 closure (whose state is just the source `Slice T`). The proof has three
 parts:
 
-1. Closure step: `call_mut s i = .ok (s.val[i.val]!, s)` for `i.val <
+1. Closure step: `call_mut s i = .ok (s.val[i.val], s)` for `i.val <
    s.length` — the closure reads the slice and preserves its state.
 2. Assembly via the shared `array_from_fn_spec` (see
-   `Spec/RustPrimitives/Slice.lean`): the closure is pure with `f k = s.val[k]!`,
+   `Spec/RustPrimitives/Slice.lean`): the closure is pure with `f k = s.val[k]`,
    so `array_from_fn N closure s = .ok (Array.make N s.val)` when
    `s.length = N.val` (the image of `0 .. N` under `f` is `s.val`).
 3. Final assembly: `try_from N inst s = .ok (.Ok a)` with `a.val = s.val`. -/
@@ -33,18 +33,18 @@ parts:
 private theorem Convert.try_from_slice_closure_eq
     {T : Type} [Inhabited T] {N : Std.Usize} (cpy : CoreModels.core.marker.Copy T)
     (s : Slice T) (i : Std.Usize) (h : i.val < s.val.length) :
+    ⦃ ⌜ True ⌝ ⦄
     CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT.call_mut
-      (T := T) (N := N) cpy s i =
-      .ok (s.val[i.val]!, s) := by
+      (T := T) (N := N) cpy s i
+    ⦃ ⇓ r => ⌜ r = (s.val[i.val]'h, s) ⌝ ⦄ := by
+  refine triple_ok_intro ?_ rfl
   -- Reduces to `do let t ← slice_index s i; ok (t, s)`.
   unfold CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT.call_mut
   unfold CoreModels.rust_primitives.slice.slice_index Std.Slice.index_usize
-  -- Now `s[i]?` matches; for `i.val < s.length`, `s[i]? = some s.val[i.val]!`.
-  have hsome : s[i]? = some s.val[i.val]! := by
+  -- Now `s[i]?` matches; for `i.val < s.length`, `s[i]? = some s.val[i.val]`.
+  have hsome : s[i]? = some (s.val[i.val]'h) := by
     simp only [Std.Slice.getElem?_Usize_eq]
-    rw [List.getElem?_eq_getElem h, List.getElem!_eq_getElem?_getD,
-        List.getElem?_eq_getElem h]
-    rfl
+    rw [List.getElem?_eq_getElem h]
   rw [hsome]
   rfl
 
@@ -52,44 +52,54 @@ private theorem Convert.try_from_slice_closure_eq
     when `s.length = N.val`.
 
     The `try_from` closure is pure — it reads `s` and preserves it — so this
-    is the shared `array_from_fn_spec` instantiated at `f := fun k => s.val[k]!`,
+    is the shared `array_from_fn_spec` instantiated at `f := fun k => s.val[k]`,
     whose image over `0 .. N` is exactly `s.val`. -/
 theorem Convert.try_from_slice_array_from_fn_eq
     {T : Type} [Inhabited T] {N : Std.Usize} (cpy : CoreModels.core.marker.Copy T)
     (s : Slice T) (hlen : s.val.length = N.val) :
+    ⦃ ⌜ True ⌝ ⦄
     CoreModels.rust_primitives.slice.array_from_fn N
       (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
         (T := T) (N := N) cpy) s
-    = .ok (Std.Array.make N s.val (by simp [hlen])) := by
+    ⦃ ⇓ a => ⌜ a = Std.Array.make N s.val (by simp [hlen]) ⌝ ⦄ := by
   have hN_max : N.val ≤ Std.Usize.max := by rw [← hlen]; exact s.property
-  -- The closure realizes the pure function `f k = s.val[k]!`.
+  -- The closure reads `s` and preserves its state, so it is pure.
   have hpure : ∀ k : Nat, k < N.val →
+      ⦃ ⌜ True ⌝ ⦄
       CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT.call_mut
-        (T := T) (N := N) cpy s ⟨BitVec.ofNat _ k⟩ = .ok (s.val[k]!, s) := by
+        (T := T) (N := N) cpy s ⟨BitVec.ofNat _ k⟩
+      ⦃ ⇓ r => ⌜ r.2 = s ⌝ ⦄ := by
     intro k hk
     have hk_len : k < s.val.length := by omega
     have hval : (⟨BitVec.ofNat Std.UScalarTy.Usize.numBits k⟩ : Std.Usize).val = k := by
       grind [Nat.mod_eq_of_lt, Std.Usize.max_def, Std.Usize.numBits_def, UScalar.val]
     have hcall := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
                     ⟨BitVec.ofNat _ k⟩ (by rw [hval]; exact hk_len)
-    rw [hval] at hcall; exact hcall
+    obtain ⟨w, hw, hwpost⟩ := exists_ok_of_triple hcall
+    exact triple_ok_intro hw (by rw [hwpost])
   -- Apply the f-free `array_from_fn_spec`: each cell of the result `a` is what
-  -- the closure produces, i.e. `s.val[i]!`; hence `a.val = s.val` pointwise.
+  -- the closure produces, i.e. `s.val[i]`; hence `a.val = s.val` pointwise.
   obtain ⟨a, ha, hapost⟩ := exists_ok_of_triple
     (array_from_fn_spec N
       (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
-        (T := T) (N := N) cpy) s
-      (fun k hk => triple_ok_intro (hpure k hk) rfl))
-  rw [ha]
-  congr 1
+        (T := T) (N := N) cpy) s hpure)
+  refine triple_ok_intro ha ?_
   apply Subtype.ext
   apply List.ext_getElem
   · rw [a.property]; exact hlen.symm
   · intro i h1 h2
     have hi : i < N.val := a.property ▸ h1
-    have hcell := triple_ok_elim (hapost i hi) (hpure i hi)
-    rw [getElem!_pos s.val i h2, getElem!_pos a.val i h1] at hcell
-    exact hcell.symm
+    have hk_len : i < s.val.length := by omega
+    have hval : (⟨BitVec.ofNat Std.UScalarTy.Usize.numBits i⟩ : Std.Usize).val = i := by
+      grind [Nat.mod_eq_of_lt, Std.Usize.max_def, Std.Usize.numBits_def, UScalar.val]
+    have hcall := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
+                    ⟨BitVec.ofNat _ i⟩ (by rw [hval]; exact hk_len)
+    obtain ⟨w, hw, hwpost⟩ := exists_ok_of_triple hcall
+    -- The cell of `a` equals what the closure produced, namely `s.val[i]`.
+    have hcell := triple_ok_elim (hapost i hi) hw
+    rw [← hcell, hwpost]
+    -- Both sides are `s.val[i]`; the closure's index `(⟨ofNat i⟩).val` reduces to `i`.
+    simp only [Std.Array.make, hval]
 
 /-- The main Triple: `try_from N cpy s` succeeds with `Ok (Array.make N s.val _)`,
     whenever `s.val.length = N.val`. -/
@@ -109,7 +119,8 @@ theorem Convert.try_from_slice_spec
   -- `try_from` needs the *exact* resulting array, so reduce via
   -- `try_from_slice_array_from_fn_eq` rather than letting `mvcgen` auto-apply
   -- the f-free `@[spec]` (whose pointwise postcondition can't directly give it).
-  have h_afn := Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen
+  have h_afn := result_eq_of_triple
+    (Convert.try_from_slice_array_from_fn_eq (T := T) (N := N) cpy s hlen)
   unfold CoreModels.core.Array.Insts.CoreConvertTryFromShared0SliceTryFromSliceError.try_from
     CoreModels.core.slice.Slice.len
   simp only [Triple, WP.wp, Pure.pure, bind_tc_ok, hi_eq, if_true, h_afn]

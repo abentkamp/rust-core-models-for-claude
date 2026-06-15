@@ -53,9 +53,9 @@ theorem array_from_fn_spec
       ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r.2 = c ⌝ ⦄) :
     ⦃ ⌜ True ⌝ ⦄
     rust_primitives.slice.array_from_fn N inst c
-    ⦃ ⇓ a => ⌜ ∀ i : Nat, i < N.val →
+    ⦃ ⇓ a => ⌜ ∀ i : Nat, (hi : i < N.val) →
                 ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ i⟩
-                          ⦃ ⇓ r => ⌜ r.1 = a.val[i]! ⌝ ⦄ ⌝ ⦄ := by
+                          ⦃ ⇓ r => ⌜ r.1 = a.val[i]'(by have := a.property; omega) ⌝ ⦄ ⌝ ⦄ := by
   -- `array_from_fn` folds over `List.range N.val`, where the index equals the
   -- position, so `array_from_fn_go_pure` directly characterizes each cell.
   obtain ⟨r, hr, hrlen, hrpost⟩ := exists_ok_of_triple
@@ -69,10 +69,6 @@ theorem array_from_fn_spec
   intro i hi
   obtain ⟨v, hv, hvval⟩ := exists_ok_of_triple (hrpost i (by simpa using hi))
   simp only [List.getElem_range] at hv
-  refine triple_ok_intro hv ?_
-  show v.1 = r[i]!
-  rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (show i < r.length by omega),
-    Option.getD_some]
-  exact hvval.symm
+  exact triple_ok_intro hv hvval.symm
 
 end CoreModels
