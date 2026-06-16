@@ -9,11 +9,7 @@ open Std.Do WP Result
 
 set_option mvcgen.warning false
 
-/-- Helper lemma for the spec of `rust_primitives.slice.array_from_fn`.
-
-The closure is called at the indices `0, 1, …, n-1` (in order, threading state),
-so the `i`-th result element is the value `call_mut` produces at index `i`. For a
-pure closure (state preserved) the final state `r.2` is unchanged. -/
+/-- Helper lemma for the spec of `rust_primitives.slice.array_from_fn`. -/
 @[spec]
 theorem array_from_fn_go_pure
     {T F : Type}
@@ -27,26 +23,17 @@ theorem array_from_fn_go_pure
                           ⦃ ⇓ r' => ⌜ r.1[i] = r'.1 ⌝ ⦄ ⌝ ⦄ := by
   induction n generalizing c with
   | zero =>
-    -- `array_from_fn_go inst c 0 = ok ([], c)`; `mvcgen` reduces the triple to
-    -- its (vacuous) postcondition.
     mvcgen [rust_primitives.slice.array_from_fn_go]
     refine ⟨trivial, rfl, ?_⟩
     intro i hi; exact absurd hi (by simp)
   | succ n ih =>
     -- Enrich `hpure` so each call's *value* (not just its state `r.2`) survives
     -- `mvcgen`: the extra conjunct pins the result via a self-referential triple.
-    have hpure' : ∀ k, k < n + 1 → ∀ c', c' = c →
-        ⦃ ⌜ True ⌝ ⦄ inst.call_mut c' ⟨BitVec.ofNat _ k⟩
-        ⦃ ⇓ r => ⌜ r.2 = c ∧
-            ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
-      intro k hk c' hc'; subst c'
-      exact triple_with_self (hpure k hk c rfl)
+    have hpure' := fun k hk c' hc' => triple_with_self (hpure k hk c' hc')
     mvcgen [rust_primitives.slice.array_from_fn_go, ih, hpure']
-    -- The final verification condition: the recursion (`h_rec`) handles indices
-    -- `< n`, and the enriched closure spec (`h_callself`) pins the last element.
     case vc6 =>
       rename_i r_rec h_rec r_call h_call
-      obtain ⟨_, h_reclen, h_recpost⟩ := h_rec
+      obtain ⟨h_receq, h_reclen, h_recpost⟩ := h_rec
       obtain ⟨h_call2, h_callself⟩ := h_call
       refine ⟨h_call2, by simp [h_reclen], ?_⟩
       intro i hi
@@ -56,12 +43,11 @@ theorem array_from_fn_go_pure
         exact h_recpost i hlt
       · -- `i = n`: the last element is `r_call.1`, pinned by `h_callself`.
         subst heq
-        rw [show (r_rec.1 ++ [r_call.1])[i]'(by simp [h_reclen]) = r_call.1 by
-              rw [List.getElem_append_right (by omega)]; simp [h_reclen]]
+        rw [← h_receq]
         mvcgen [h_callself]
-        rintro rfl; rfl
+        grind
     -- The remaining goals are the specs' premises (index bounds, state equality).
-    all_goals first | omega | tauto
+    all_goals grind
 
 /-- This spec assumes that the closure is not mutated. If the closure was mutated,
 we would need a more complex spec that would require the user to provide an invariant. -/
