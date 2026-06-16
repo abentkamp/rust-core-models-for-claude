@@ -68,14 +68,16 @@ def rust_primitives.slice.slice_clone_from_slice
   else fail .panic
 
 /-- Recursive worker for `array_from_fn`: threads the `FnMut` closure state
-    across the index list, producing one element per index. -/
+    through the calls at indices `0, 1, …, n-1` (in order, like Rust's
+    `std::array::from_fn`), returning the produced elements together with the
+    final closure state. -/
 def rust_primitives.slice.array_from_fn_go {T F : Type}
-    (inst : core.ops.function.FnMut F Std.Usize T) : F → List Nat → Result (List T)
-  | _, [] => ok []
-  | c, i :: is => do
-    let p ← inst.call_mut c ⟨BitVec.ofNat _ i⟩
-    let r ← array_from_fn_go inst p.2 is
-    ok (p.1 :: r)
+    (inst : core.ops.function.FnMut F Std.Usize T) : F → Nat → Result (List T × F)
+  | c, 0 => ok ([], c)
+  | c, n + 1 => do
+    let p ← array_from_fn_go inst c n
+    let q ← inst.call_mut p.2 ⟨BitVec.ofNat _ n⟩
+    ok (p.1 ++ [q.1], q.2)
 
 /-- [rust_primitives::slice::array_from_fn]:
     Source: 'rust_primitives/src/lib.rs', lines 28:4-28:81
@@ -86,10 +88,10 @@ def rust_primitives.slice.array_from_fn
   {T : Type} {F : Type} (N : Std.Usize) (coreopsfunctionFnMutFTupleUsizeTInst :
   core.ops.function.FnMut F Std.Usize T) :
   F → Result (Array T N) := fun f => do
-  let result ← array_from_fn_go coreopsfunctionFnMutFTupleUsizeTInst f (List.range N.val)
+  let p ← array_from_fn_go coreopsfunctionFnMutFTupleUsizeTInst f N.val
   -- The `else` is unreachable: `array_from_fn_go` always returns one element per
-  -- index, so `result.length = (List.range N.val).length = N.val`.
-  (if h : result.length = N.val then ok ⟨result, h⟩ else fail .panic)
+  -- index, so `p.1.length = N.val`.
+  (if h : p.1.length = N.val then ok ⟨p.1, h⟩ else fail .panic)
 
 /-- [rust_primitives::slice::array_map]:
     Source: 'rust_primitives/src/lib.rs', lines 31:4-31:84
