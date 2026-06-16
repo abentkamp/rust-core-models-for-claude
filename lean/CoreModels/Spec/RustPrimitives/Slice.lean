@@ -27,27 +27,37 @@ theorem array_from_fn_go_pure
                           ⦃ ⇓ r' => ⌜ r.1[i] = r'.1 ⌝ ⦄ ⌝ ⦄ := by
   induction n generalizing c with
   | zero =>
-    refine triple_ok_intro rfl ⟨rfl, rfl, ?_⟩
+    -- `array_from_fn_go inst c 0 = ok ([], c)`; `mvcgen` reduces the triple to
+    -- its (vacuous) postcondition.
+    mvcgen [rust_primitives.slice.array_from_fn_go]
+    refine ⟨trivial, rfl, ?_⟩
     intro i hi; exact absurd hi (by simp)
   | succ n ih =>
+    -- Run the recursive call and the closure call, recording their results.
     obtain ⟨p, hp, hp2, hplen, hppost⟩ :=
       exists_ok_of_triple (ih c (fun k hk c' hc' => hpure k (Nat.lt_succ_of_lt hk) c' hc'))
     obtain ⟨q, hq, hq2⟩ := exists_ok_of_triple (hpure n (Nat.lt_succ_self n) p.2 hp2)
-    have hgo : rust_primitives.slice.array_from_fn_go inst c (n + 1)
-        = .ok (p.1 ++ [q.1], q.2) := by
-      simp only [rust_primitives.slice.array_from_fn_go, hp, bind_tc_ok, hq]
-    refine triple_ok_intro hgo ⟨hq2, by simp [hplen], ?_⟩
+    -- Collapse the worker to `ok (p.1 ++ [q.1], q.2)`, then let `mvcgen`
+    -- discharge the resulting triple down to its postcondition.
+    rw [show rust_primitives.slice.array_from_fn_go inst c (n + 1)
+          = .ok (p.1 ++ [q.1], q.2) by
+        simp only [rust_primitives.slice.array_from_fn_go, hp, bind_tc_ok, hq]]
+    mvcgen
+    refine ⟨hq2, by simp [hplen], ?_⟩
     intro i hi
     rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | heq
     · -- `i < n`: the `i`-th element comes from `p.1`.
       have hidx : (p.1 ++ [q.1])[i]'(by simp [hplen]; omega) = p.1[i]'(by omega) :=
         List.getElem_append_left (by omega)
       rw [hidx]; exact hppost i hlt
-    · -- `i = n`: the last element is `q.1`.
+    · -- `i = n`: the last element is `q.1`; `mvcgen` discharges the closure call.
       subst heq
       have hidx : (p.1 ++ [q.1])[i]'(by simp [hplen]) = q.1 := by
         rw [List.getElem_append_right (by omega)]; simp [hplen]
-      rw [hidx]; exact triple_ok_intro (hp2 ▸ hq) rfl
+      rw [hidx]
+      have hqc := triple_of_result_eq (hp2 ▸ hq)
+      mvcgen [hqc]
+      rintro rfl; rfl
 
 /-- This spec assumes that the closure is not mutated. If the closure was mutated,
 we would need a more complex spec that would require the user to provide an invariant. -/
