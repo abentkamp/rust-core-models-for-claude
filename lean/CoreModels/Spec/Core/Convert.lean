@@ -57,39 +57,24 @@ theorem Convert.try_from_slice_array_from_fn_eq
       (CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT
         (T := T) (N := N) cpy) s
     ⦃ ⇓ a => ⌜ a = Std.Array.make N s.val (by simp [hlen]) ⌝ ⦄ := by
-  have hN_max : N.val ≤ Std.Usize.max := by rw [← hlen]; exact s.property
-  -- The closure reads `s` and preserves its state, so it is pure: `mvcgen`
-  -- weakens the closure step `closure_eq` to its state-preservation part.
-  have hpure : ∀ k : Nat, k < N.val →
-      ⦃ ⌜ True ⌝ ⦄
-      CoreModels.core.convert.TryFromArrayShared0SliceTryFromSliceError.try_from.closure.Insts.CoreOpsFunctionFnMutTupleUsizeT.call_mut
-        (T := T) (N := N) cpy s ⟨BitVec.ofNat _ k⟩
-      ⦃ ⇓ r => ⌜ r.2 = s ⌝ ⦄ := by
-    intro k hk
-    have hval : (⟨BitVec.ofNat Std.UScalarTy.Usize.numBits k⟩ : Std.Usize).val = k := by
-      grind [Nat.mod_eq_of_lt, Std.Usize.max_def, Std.Usize.numBits_def, UScalar.val]
-    have hc := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
-                    ⟨BitVec.ofNat _ k⟩ (by rw [hval]; omega)
-    mvcgen [hc]
-    grind
-  -- Apply the f-free `array_from_fn_spec` (a `@[spec]`) via `mvcgen`; each cell
-  -- of the result `a` is what the closure produces, i.e. `s.val[i]`.
-  mvcgen [hpure]
-  rename_i a
-  intro hapost
-  apply Subtype.ext
-  apply List.ext_getElem
-  · rw [a.property]; exact hlen.symm
-  · intro i h1 h2
-    have hi : i < N.val := a.property ▸ h1
-    have hval : (⟨BitVec.ofNat Std.UScalarTy.Usize.numBits i⟩ : Std.Usize).val = i := by
-      grind [Nat.mod_eq_of_lt, Std.Usize.max_def, Std.Usize.numBits_def, UScalar.val]
-    have hc := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
-                    ⟨BitVec.ofNat _ i⟩ (by rw [hval]; omega)
-    -- Combine the cell triple (`hapost i`) with the closure's concrete value.
-    have hcell := triple_ok_elim (hapost i hi) (result_eq_of_triple hc)
-    simp only [Std.Array.make, hval] at hcell ⊢
-    exact hcell.symm
+  mvcgen [Convert.try_from_slice_closure_eq]
+  · grind [UScalar.val]
+  · grind
+  · rename_i a
+    intro hapost
+    apply Subtype.ext
+    apply List.ext_getElem
+    · rw [a.property]; exact hlen.symm
+    · intro i h1 h2
+      have hi : i < N.val := a.property ▸ h1
+      have hval : (⟨BitVec.ofNat Std.UScalarTy.Usize.numBits i⟩ : Std.Usize).val = i := by
+        grind [Nat.mod_eq_of_lt, Std.Usize.max_def, Std.Usize.numBits_def, UScalar.val]
+      have hc := Convert.try_from_slice_closure_eq (T := T) (N := N) cpy s
+                      ⟨BitVec.ofNat _ i⟩ (by rw [hval]; omega)
+      -- Combine the cell triple (`hapost i`) with the closure's concrete value.
+      have hcell := triple_ok_elim (hapost i hi) (result_eq_of_triple hc)
+      simp only [Std.Array.make, hval] at hcell ⊢
+      exact hcell.symm
 
 /-- The main Triple: `try_from N cpy s` succeeds with `Ok (Array.make N s.val _)`,
     whenever `s.val.length = N.val`. -/
