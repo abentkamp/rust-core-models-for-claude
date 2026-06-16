@@ -33,31 +33,35 @@ theorem array_from_fn_go_pure
     refine ⟨trivial, rfl, ?_⟩
     intro i hi; exact absurd hi (by simp)
   | succ n ih =>
-    -- Run the recursive call and the closure call, recording their results.
-    obtain ⟨p, hp, hp2, hplen, hppost⟩ :=
-      exists_ok_of_triple (ih c (fun k hk c' hc' => hpure k (Nat.lt_succ_of_lt hk) c' hc'))
-    obtain ⟨q, hq, hq2⟩ := exists_ok_of_triple (hpure n (Nat.lt_succ_self n) p.2 hp2)
-    -- Collapse the worker to `ok (p.1 ++ [q.1], q.2)`, then let `mvcgen`
-    -- discharge the resulting triple down to its postcondition.
-    rw [show rust_primitives.slice.array_from_fn_go inst c (n + 1)
-          = .ok (p.1 ++ [q.1], q.2) by
-        simp only [rust_primitives.slice.array_from_fn_go, hp, bind_tc_ok, hq]]
-    mvcgen
-    refine ⟨hq2, by simp [hplen], ?_⟩
-    intro i hi
-    rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | heq
-    · -- `i < n`: the `i`-th element comes from `p.1`.
-      have hidx : (p.1 ++ [q.1])[i]'(by simp [hplen]; omega) = p.1[i]'(by omega) :=
-        List.getElem_append_left (by omega)
-      rw [hidx]; exact hppost i hlt
-    · -- `i = n`: the last element is `q.1`; `mvcgen` discharges the closure call.
-      subst heq
-      have hidx : (p.1 ++ [q.1])[i]'(by simp [hplen]) = q.1 := by
-        rw [List.getElem_append_right (by omega)]; simp [hplen]
-      rw [hidx]
-      have hqc := triple_of_result_eq (hp2 ▸ hq)
-      mvcgen [hqc]
-      rintro rfl; rfl
+    -- Enrich `hpure` so each call's *value* (not just its state `r.2`) survives
+    -- `mvcgen`: the extra conjunct pins the result via a self-referential triple.
+    have hpure' : ∀ k, k < n + 1 → ∀ c', c' = c →
+        ⦃ ⌜ True ⌝ ⦄ inst.call_mut c' ⟨BitVec.ofNat _ k⟩
+        ⦃ ⇓ r => ⌜ r.2 = c ∧
+            ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
+      intro k hk c' hc'; subst c'
+      exact triple_with_self (hpure k hk c rfl)
+    mvcgen [rust_primitives.slice.array_from_fn_go, ih, hpure']
+    -- The final verification condition: the recursion (`h_rec`) handles indices
+    -- `< n`, and the enriched closure spec (`h_callself`) pins the last element.
+    case vc6 =>
+      rename_i r_rec h_rec r_call h_call
+      obtain ⟨_, h_reclen, h_recpost⟩ := h_rec
+      obtain ⟨h_call2, h_callself⟩ := h_call
+      refine ⟨h_call2, by simp [h_reclen], ?_⟩
+      intro i hi
+      rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | heq
+      · -- `i < n`: the `i`-th element comes from the recursion.
+        rw [List.getElem_append_left (by omega)]
+        exact h_recpost i hlt
+      · -- `i = n`: the last element is `r_call.1`, pinned by `h_callself`.
+        subst heq
+        rw [show (r_rec.1 ++ [r_call.1])[i]'(by simp [h_reclen]) = r_call.1 by
+              rw [List.getElem_append_right (by omega)]; simp [h_reclen]]
+        mvcgen [h_callself]
+        rintro rfl; rfl
+    -- The remaining goals are the specs' premises (index bounds, state equality).
+    all_goals first | omega | tauto
 
 /-- This spec assumes that the closure is not mutated. If the closure was mutated,
 we would need a more complex spec that would require the user to provide an invariant. -/

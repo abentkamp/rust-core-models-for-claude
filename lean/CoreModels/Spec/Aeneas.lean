@@ -50,6 +50,17 @@ theorem exists_ok_of_triple {α : Type} {x : Result α} {P : α → Prop}
   | fail e => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
   | div => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
 
+/-- Strengthen a `noThrow` Triple so the result's *value* survives `mvcgen`:
+alongside the postcondition `P`, the result `r` is pinned by a self-referential
+Triple stating that re-running `x` yields `r` again. This lets a spec whose
+postcondition only mentions a projection of `r` (e.g. `r.2`) still expose the
+full value after symbolic execution. -/
+theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
+    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ∧ ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
+  obtain ⟨a, hx, hPa⟩ := exists_ok_of_triple h
+  exact triple_ok_intro hx ⟨hPa, triple_of_result_eq hx⟩
+
 attribute [spec] Function.uncurry lift massert
 
 @[spec]
