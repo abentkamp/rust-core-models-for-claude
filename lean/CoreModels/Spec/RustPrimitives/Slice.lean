@@ -62,17 +62,22 @@ theorem array_from_fn_spec
     ⦃ ⇓ a => ⌜ ∀ i : Nat, (hi : i < N.val) →
                 ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ i⟩
                           ⦃ ⇓ r => ⌜ r.1 = a.val[i]'(by have := a.property; omega) ⌝ ⦄ ⌝ ⦄ := by
-  -- `array_from_fn` runs the worker over `0 .. N.val`, where the index equals
-  -- the position, so `array_from_fn_go_pure` directly characterizes each cell.
-  obtain ⟨r, hr, _, hrlen, hrpost⟩ := exists_ok_of_triple
-    (array_from_fn_go_pure inst c N.val
-      (fun k hk c' hc' => hc' ▸ hpure k hk))
-  have haf : rust_primitives.slice.array_from_fn N inst c = .ok ⟨r.1, hrlen⟩ := by
-    simp only [rust_primitives.slice.array_from_fn, hr, bind_tc_ok]
-    rw [dif_pos hrlen]
-  refine triple_ok_intro haf ?_
-  intro i hi
-  obtain ⟨v, hv, hvval⟩ := exists_ok_of_triple (hrpost i hi)
-  exact triple_ok_intro hv hvval.symm
+  -- The worker spec `array_from_fn_go_pure` (a `@[spec]`) is applied by `mvcgen`;
+  -- `hpure'` supplies its (state-preservation) premise.
+  have hpure' : ∀ k, k < N.val → ∀ c', c' = c →
+      ⦃ ⌜ True ⌝ ⦄ inst.call_mut c' ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r.2 = c ⌝ ⦄ :=
+    fun k hk c' hc' => hc' ▸ hpure k hk
+  mvcgen [rust_primitives.slice.array_from_fn, hpure']
+  · -- then-branch: each cell is what the worker's nested triple produces.
+    rename_i r hlen hconj
+    obtain ⟨_, _, hpost⟩ := hconj
+    intro i hi
+    have hp := hpost i hi
+    mvcgen [hp]
+    grind
+  · -- else-branch is impossible: the worker's length equals `N`.
+    rename_i r hlen hconj
+    obtain ⟨_, hlen', _⟩ := hconj
+    exact absurd hlen' hlen
 
 end CoreModels

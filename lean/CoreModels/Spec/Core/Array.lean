@@ -80,10 +80,12 @@ theorem Array.from_fn_spec
   mvcgen
   case vc1.hpure =>
     rename_i k hk
-    rw [result_eq_of_triple (hpure k hk)]
-    simp [WP.wp, PredTrans.apply]
+    have hk' := hpure k hk
+    mvcgen [hk']
+    grind
   case vc2.success =>
     intro hpost i hi
+    -- Combine the cell triple with the closure's concrete value `f i`.
     exact (triple_ok_elim (hpost i hi) (result_eq_of_triple (hpure i hi))).symm
 
 end CoreModels
