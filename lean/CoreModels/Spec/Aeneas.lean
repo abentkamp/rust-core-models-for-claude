@@ -64,7 +64,13 @@ theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
 theorem triple_in_hypothesis {f : Result α} {Q : α → Assertion _} (p : Prop)
     (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ r => Q r ⦄)
     (hp : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓? r => Q r → ⌜ p ⌝ ⦄) :
-    p := by sorry
+    p := by
+  -- `h` (noThrow) forces `f = .ok a` with `Q a`; `hp` (mayThrow) gives `Q a → p`
+  -- on that success branch, so `p` follows.
+  cases hf : f with
+  | ok a => rw [hf] at h hp; simp_all [Triple, WP.wp, PredTrans.apply]
+  | fail e => rw [hf] at h; simp_all [Triple, WP.wp, PredTrans.apply]
+  | div => rw [hf] at h; simp_all [Triple, WP.wp, PredTrans.apply]
 
 attribute [spec] Function.uncurry lift massert
 
