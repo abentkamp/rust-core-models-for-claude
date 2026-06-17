@@ -61,6 +61,11 @@ theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
   obtain ⟨a, hx, hPa⟩ := exists_ok_of_triple h
   exact triple_ok_intro hx ⟨hPa, triple_of_result_eq hx⟩
 
+theorem triple_in_hypothesis {f : Result α} {Q : α → Assertion _} (p : Prop)
+    (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ r => Q r ⦄)
+    (hp : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓? r => Q r → ⌜ p ⌝ ⦄) :
+    p := by sorry
+
 attribute [spec] Function.uncurry lift massert
 
 @[spec]
