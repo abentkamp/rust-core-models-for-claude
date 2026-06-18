@@ -51,19 +51,8 @@ theorem Array.index_range_spec
     <;> grind
 
 
-/-! ## A generic `from_fn` pure-closure spec.
-
-Analogous to `createi_pure_spec` (HacspecBridge.lean:663) but takes
-a `FnMut` instance directly (no `Fn` wrapper). Required because
-`sponge.xor_block_into_state` calls `CoreModels.core.array.from_fn` directly
-with the `FnMut` instance of its closure. -/
-
-/-- **Generic pure-closure `[spec]` for `core_models.array.from_fn`.**
-
-For any closure whose `call_mut` is pure (doesn't mutate state),
-`from_fn N inst c` succeeds and its `i`-th cell is `f i`. `hpure` is a
-Triple over each `call_mut` so `hax_mvcgen` can recurse through it via
-per-closure `@[spec]` lemmas. -/
+/-- This spec for from_fn only works for non-mutating functions. If the function
+mutates, we would need a different spec with a user-provided invariant. -/
 @[spec]
 theorem Array.from_fn_spec
     {T F : Type} [Inhabited T] (N : Std.Usize)
@@ -85,10 +74,8 @@ theorem Array.from_fn_spec
     grind
   case vc2.success =>
     intro hpost i hi
-    -- Combine the cell triple with the closure's concrete value `f i`.
     apply triple_in_hypothesis _ (hpost i hi)
-    have hp := hpure i hi
-    mvcgen [hp]
+    mvcgen [hpure]
     grind
 
 end CoreModels
