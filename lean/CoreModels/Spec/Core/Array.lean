@@ -86,6 +86,9 @@ theorem Array.from_fn_spec
   case vc2.success =>
     intro hpost i hi
     -- Combine the cell triple with the closure's concrete value `f i`.
-    exact (triple_ok_elim (hpost i hi) (result_eq_of_triple (hpure i hi))).symm
+    apply triple_in_hypothesis _ (hpost i hi)
+    have hp := hpure i hi
+    mvcgen [hp]
+    grind
 
 end CoreModels
