@@ -39,7 +39,7 @@ theorem Convert.try_from_slice_spec
     apply Subtype.ext
     apply List.ext_getElem
     · rw [a.property]; exact hlen.symm
-    · intro i h1 h2 -- TODO: use triple from hyp, and then mvcgen.
+    · intro i h1 h2
       apply triple_in_hypothesis _ (hapost i (a.property ▸ h1))
       mvcgen <;> grind [UScalar.val, Array.make]
   · grind
