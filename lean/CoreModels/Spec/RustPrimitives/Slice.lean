@@ -9,9 +9,8 @@ open Std.Do WP Result
 
 set_option mvcgen.warning false
 
-/-- Helper lemma for the spec of `rust_primitives.slice.array_from_fn`. -/
 @[spec]
-theorem array_from_fn_go_pure
+theorem rust_primitives.slice.array_from_fn_go_spec
     {T F : Type}
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F) (n : Nat)
     (hpure : ∀ k, k < n → ∀ c', c' = c →
@@ -27,8 +26,7 @@ theorem array_from_fn_go_pure
     refine ⟨trivial, rfl, ?_⟩
     intro i hi; exact absurd hi (by simp)
   | succ n ih =>
-    -- Enrich `hpure` so each call's *value* (not just its state `r.2`) survives
-    -- `mvcgen`: the extra conjunct pins the result via a self-referential triple.
+    -- Enrich `hpure` mvcgen's VC still contains the fact that the value came from `call_mut`:
     have hpure' := fun k hk c' hc' => triple_with_self (hpure k hk c' hc')
     mvcgen [rust_primitives.slice.array_from_fn_go, ih, hpure']
     case vc6 =>
@@ -39,20 +37,19 @@ theorem array_from_fn_go_pure
       intro i hi
       rcases Nat.lt_succ_iff_lt_or_eq.mp hi with hlt | heq
       · -- `i < n`: the `i`-th element comes from the recursion.
-        rw [List.getElem_append_left (by omega)]
-        exact h_recpost i hlt
+        mvcgen [h_recpost]
+        grind
       · -- `i = n`: the last element is `r_call.1`, pinned by `h_callself`.
         subst heq
         rw [← h_receq]
         mvcgen [h_callself]
         grind
-    -- The remaining goals are the specs' premises (index bounds, state equality).
     all_goals grind
 
 /-- This spec assumes that the closure is not mutated. If the closure was mutated,
 we would need a more complex spec that would require the user to provide an invariant. -/
 @[spec]
-theorem array_from_fn_spec
+theorem rust_primitives.slice.array_from_fn_spec
     {T F : Type} [Inhabited T] (N : Std.Usize)
     (inst : core.ops.function.FnMut F Std.Usize T) (c : F)
     (hpure : ∀ k : Nat, k < N.val →
@@ -62,13 +59,13 @@ theorem array_from_fn_spec
     ⦃ ⇓ a => ⌜ ∀ i : Nat, (hi : i < N.val) →
                 ⦃ ⌜ True ⌝ ⦄ inst.call_mut c ⟨BitVec.ofNat _ i⟩
                           ⦃ ⇓ r => ⌜ r.1 = a.val[i]'(by have := a.property; omega) ⌝ ⦄ ⌝ ⦄ := by
-  -- The worker spec `array_from_fn_go_pure` (a `@[spec]`) is applied by `mvcgen`;
-  -- `hpure'` supplies its (state-preservation) premise.
+  -- We enrich `hpure` by universally quantifying over the `call_mut` argument instead of fixing
+  -- it to `c`:
   have hpure' : ∀ k, k < N.val → ∀ c', c' = c →
       ⦃ ⌜ True ⌝ ⦄ inst.call_mut c' ⟨BitVec.ofNat _ k⟩ ⦃ ⇓ r => ⌜ r.2 = c ⌝ ⦄ :=
     fun k hk c' hc' => hc' ▸ hpure k hk
   mvcgen [rust_primitives.slice.array_from_fn, hpure']
-  · -- then-branch: each cell is what the worker's nested triple produces.
+  · -- then-branch
     rename_i r hlen hconj
     obtain ⟨_, _, hpost⟩ := hconj
     intro i hi
@@ -76,8 +73,6 @@ theorem array_from_fn_spec
     mvcgen [hp]
     grind
   · -- else-branch is impossible: the worker's length equals `N`.
-    rename_i r hlen hconj
-    obtain ⟨_, hlen', _⟩ := hconj
-    exact absurd hlen' hlen
+    grind
 
 end CoreModels

@@ -13,64 +13,35 @@ theorem Result.ok_spec {α : Type} {a : α} {Q} (hQ : (Q.1 a).down) :
 theorem Result.fail_spec {α : Type} {e : Error} {Q} (hQ : (Q.2.1 e).down) :
   ⦃ ⌜ True ⌝ ⦄ (Result.fail e : Result α) ⦃ Q ⦄ := by simpa [Triple]
 
-/-- Extract a concrete `= .ok v` equation from a `noThrow` Triple.
-
-Since `⇓ r => …` is `PostCond.noThrow` (its `fail`/`div` branches are
-`False`), a Triple `⦃⌜True⌝⦄ x ⦃⇓ r => ⌜r = v⌝⦄` forces `x` onto the `ok`
-branch with value `v`. This is the bridge that lets a pure-closure `[spec]`
-hypothesis (stated as a Triple) be used as a plain Lean equation. -/
-theorem result_eq_of_triple {α : Type} {x : Result α} {v : α}
-    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄) : x = .ok v := by
+/-- A triple with postcondition `r = v` is eqivalent to the program being `.ok v`. -/
+theorem triple_of_result_eq {α : Type} {x : Result α} {v : α} :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ ↔ x = .ok v := by
   cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
-/-- Converse of `result_eq_of_triple`: a `= .ok v` equation gives a `noThrow`
-Triple. Lets a pure-equation hypothesis be fed to an `mvcgen`/Triple-based
-spec. -/
-theorem triple_of_result_eq {α : Type} {x : Result α} {v : α}
-    (h : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ r = v ⌝ ⦄ := by
-  subst h; exact Result.ok_spec (by simp)
+/-- If the program equals `.ok v`, then a triple is equivalent to its postcondition on `.ok v`.  -/
+theorem triple_iff_post_of_eq_ok {α : Type} {x : Result α} {v : α} {P : α → Prop}
+    (hx : x = .ok v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ P v := by
+  simp_all [Triple, WP.wp, PredTrans.apply]
 
-/-- Read a `noThrow` postcondition off at a concrete `ok` value: a Triple
-`⦃⌜True⌝⦄ x ⦃⇓ r => ⌜P r⌝⦄` together with `x = .ok v` yields `P v`. -/
-theorem triple_ok_elim {α : Type} {x : Result α} {v : α} {P : α → Prop}
-    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) (hx : x = .ok v) : P v := by
-  subst hx; simpa [Triple, WP.wp, PredTrans.apply] using h
+/-- A triple is equivalent to the existence of a value `a` such that the program is `.ok a`
+and the postcondition holds on `a`. -/
+theorem triple_iff_exists_ok {α : Type} {x : Result α} {P : α → Prop} :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ ↔ ∃ a, x = .ok a ∧ P a := by
+  cases x <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
-/-- Build a `noThrow` Triple from a concrete `ok` result and a fact about it. -/
-theorem triple_ok_intro {α : Type} {x : Result α} {v : α} {P : α → Prop}
-    (hx : x = .ok v) (hv : P v) : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄ := by
-  subst hx; exact Result.ok_spec hv
-
-/-- A `noThrow` Triple forces `x` onto the `ok` branch, exposing both the value
-and the postcondition. -/
-theorem exists_ok_of_triple {α : Type} {x : Result α} {P : α → Prop}
-    (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) : ∃ a, x = .ok a ∧ P a := by
-  cases hx : x with
-  | ok a => exact ⟨a, rfl, triple_ok_elim h hx⟩
-  | fail e => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
-  | div => rw [hx] at h; simp_all [Triple, WP.wp, PredTrans.apply]
-
-/-- Strengthen a `noThrow` Triple so the result's *value* survives `mvcgen`:
-alongside the postcondition `P`, the result `r` is pinned by a self-referential
-Triple stating that re-running `x` yields `r` again. This lets a spec whose
-postcondition only mentions a projection of `r` (e.g. `r.2`) still expose the
-full value after symbolic execution. -/
+/-- Enrich triple's postcondition to contain a triple stating which program produced the value. -/
 theorem triple_with_self {α : Type} {x : Result α} {P : α → Prop}
     (h : ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ⌝ ⦄) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ P r ∧ ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r' => ⌜ r' = r ⌝ ⦄ ⌝ ⦄ := by
-  obtain ⟨a, hx, hPa⟩ := exists_ok_of_triple h
-  exact triple_ok_intro hx ⟨hPa, triple_of_result_eq hx⟩
+  obtain ⟨a, hx, hPa⟩ := triple_iff_exists_ok.1 h
+  exact (triple_iff_post_of_eq_ok hx).2 ⟨hPa, triple_of_result_eq.2 hx⟩
 
+/- Modus-ponens-like reasoning on a `noThrow` and a `mayThrow` triple -/
 theorem triple_in_hypothesis {f : Result α} {Q : α → Assertion _} (p : Prop)
     (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ r => Q r ⦄)
     (hp : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓? r => Q r → ⌜ p ⌝ ⦄) :
     p := by
-  -- `h` (noThrow) forces `f = .ok a` with `Q a`; `hp` (mayThrow) gives `Q a → p`
-  -- on that success branch, so `p` follows.
-  cases hf : f with
-  | ok a => rw [hf] at h hp; simp_all [Triple, WP.wp, PredTrans.apply]
-  | fail e => rw [hf] at h; simp_all [Triple, WP.wp, PredTrans.apply]
-  | div => rw [hf] at h; simp_all [Triple, WP.wp, PredTrans.apply]
+  cases f <;> simp_all [Triple, WP.wp, PredTrans.apply]
 
 attribute [spec] Function.uncurry lift massert
 

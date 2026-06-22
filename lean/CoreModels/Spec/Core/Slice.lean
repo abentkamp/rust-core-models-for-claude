@@ -12,7 +12,7 @@ attribute [spec]
   CoreModels.core.slice.Slice.len
 
 @[spec]
-theorem Slice.index_range_spec
+theorem core.Shared0Slice.Insts.CoreOpsIndexIndexRangeUsizeSlice.index_spec
     {T : Type} (s : Slice T) (r : core.ops.range.Range Std.Usize)
     (h0 : r.start.val < r.end.val) -- TODO: we should be able to allow "≤"
     (h1 : r.end.val ≤ s.val.length) :

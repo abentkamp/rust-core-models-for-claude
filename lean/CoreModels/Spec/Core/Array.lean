@@ -50,7 +50,6 @@ theorem Array.index_range_spec
     rust_primitives.slice.array_slice, -Array.subslice_spec.mvcgen_spec, Array.subslice]
     <;> grind
 
-
 /-- This spec for from_fn only works for non-mutating functions. If the function
 mutates, we would need a different spec with a user-provided invariant. -/
 @[spec]
@@ -64,13 +63,11 @@ theorem Array.from_fn_spec
     ⦃ ⌜ True ⌝ ⦄
     core.array.from_fn N inst c
     ⦃ ⇓ a => ⌜ ∀ i : Nat, (hi : i < N.val) →
-                a.val[i]'(by have := a.property; omega) = f i ⌝ ⦄ := by
+                a.val[i]'(by grind) = f i ⌝ ⦄ := by
   unfold CoreModels.core.array.from_fn
   mvcgen
-  case vc1.hpure =>
-    rename_i k hk
-    have hk' := hpure k hk
-    mvcgen [hk']
+  case vc1.hpure k hk =>
+    mvcgen [hpure]
     grind
   case vc2.success =>
     intro hpost i hi

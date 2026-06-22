@@ -11,21 +11,20 @@ open Std.Do WP Result
 set_option mvcgen.warning false
 
 @[spec]
-theorem Iter.Range_next_spec (i e : Usize) {Q}
-      (h_lt : (h : i.val < e.val) →
-        ∀ (s : Usize), s.val = i.val + 1 → (Q.1 (some i, { start := s, «end» := e })).down)
-      (h_ge : i.val ≥ e.val → (Q.1 (none, { start := i, «end» := e })).down) :
+theorem core.IteratorRange.next_CoreIterRangeStep_spec {Q} (range : core.ops.range.Range Std.Usize)
+      (h_lt : (h : range.start.val < range.end.val) →
+        ∀ (s : Usize), s.val = range.start.val + 1 →
+        (Q.1 (some range.start, { start := s, «end» := range.end })).down)
+      (h_ge : range.start.val ≥ range.end.val → (Q.1 (none, range)).down) :
     ⦃ ⌜ True ⌝ ⦄
-    core.IteratorRange.next core.Usize.Insts.CoreIterRangeStep
-      { start := i, «end» := e }
+    core.IteratorRange.next core.Usize.Insts.CoreIterRangeStep range
     ⦃ Q ⦄ := by
-  unfold core.IteratorRange.next core.Usize.Insts.CoreIterRangeStep
-  simp only [core.Usize.Insts.CoreCmpPartialOrdUsize, core.mkUPartialOrd,
+  mvcgen [core.IteratorRange.next, core.Usize.Insts.CoreIterRangeStep, uncurry,
+    core.Usize.Insts.CoreCmpPartialOrdUsize, core.mkUPartialOrd,
     core.Usize.Insts.CoreCloneClone.clone, core.Usize.Insts.CoreIterRangeStep.forward_checked,
     core.convert.TryFromUTInfallible.Blanket.try_from, core.convert.From.Blanket.from,
     core.num.Usize.checked_add, core.num.Usize.overflowing_add,
     rust_primitives.arithmetic.overflowing_add_usize]
-  mvcgen [uncurry]
     <;> grind [UScalar.overflowing_add, BitVec.uaddOverflow, UScalar.overflowing_add_eq]
 
 end CoreModels
